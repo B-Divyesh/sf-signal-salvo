@@ -1,4 +1,4 @@
-FROM rust:1-slim AS server-builder
+FROM rust:1-slim-bookworm AS server-builder
 WORKDIR /build
 ARG BUILD_SHA=dev
 ENV BUILD_SHA=$BUILD_SHA
