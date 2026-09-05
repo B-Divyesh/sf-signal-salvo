@@ -1,0 +1,58 @@
+[
+  {
+    "id": "sample-match-end",
+    "claim": "The sample match reaches an actual win, loss, or draw screen.",
+    "where": "Demo game and README",
+    "test": "npm test -- --grep @claim:sample-match-end",
+    "sandbox": "Fresh browser context at /demo; queue the supplied sample plan until the end screen appears."
+  },
+  {
+    "id": "restart-reset",
+    "claim": "Play the sample again resets the board, round, queue, and integrity.",
+    "where": "Sample end screen",
+    "test": "npm test -- --grep @claim:restart-reset",
+    "sandbox": "Finish the deterministic sample, restart it, and inspect the observable round and craft state."
+  },
+  {
+    "id": "settings-persist",
+    "claim": "Game settings persist on this device and demo settings use a separate namespace.",
+    "where": "Settings dialog and privacy page",
+    "test": "npm test -- --grep @claim:settings-persist",
+    "sandbox": "Fresh /demo context; change sound, reload, inspect the control and localStorage namespaces."
+  },
+  {
+    "id": "steady-frame-rate",
+    "claim": "The sample animation loop sustains at least 55 frames per second in the phone test.",
+    "where": "README and handoff",
+    "test": "npm test -- --grep @claim:steady-frame-rate",
+    "sandbox": "Chromium at 390x844; measure requestAnimationFrame for 2.2 seconds during the sample match."
+  },
+  {
+    "id": "demo-private",
+    "claim": "The sample match sends no game commands outside its page and writes no real-room data.",
+    "where": "Demo banner and privacy page",
+    "test": "npm test -- --grep @claim:demo-private",
+    "sandbox": "Fresh browser context; record all requests during one sample round and inspect localStorage."
+  },
+  {
+    "id": "online-two-player",
+    "claim": "Two independent browser clients can finish a room while plans stay hidden until both lock.",
+    "where": "Landing page, game planner, and README",
+    "test": "npm test -- --grep @claim:online-two-player",
+    "sandbox": "Two isolated Chromium contexts use the local Rust service to create, join, play six rounds, and reach both end screens."
+  },
+  {
+    "id": "room-token-expiry",
+    "claim": "Each reconnect token stops working after its player receives the match result.",
+    "where": "Privacy page and README",
+    "test": "npm test -- --grep @claim:room-token-expiry",
+    "sandbox": "Two API clients complete six rounds, receive final views, then verify both tokens return HTTP 410."
+  },
+  {
+    "id": "free-no-account",
+    "claim": "A visitor can create a free room without an account or payment step.",
+    "where": "Landing page and terms page",
+    "test": "npm test -- --grep @claim:free-no-account",
+    "sandbox": "Fresh browser context; verify no credential form, create a room, and inspect the resulting path."
+  }
+]

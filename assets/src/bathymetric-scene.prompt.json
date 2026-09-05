@@ -1,0 +1,9 @@
+{
+  "date": "2026-09-05",
+  "generator": "Azure AI Foundry factory-image via /opt/fleet/lib/gen-image.sh",
+  "size": "1536x1024",
+  "quality": "high",
+  "use_case": "stylized-concept",
+  "prompt": "Abstract overhead ocean tactics table made from layered cut paper, with two tiny geometric signal craft and one circular sonar ripple. Handmade bathymetric contour layers, visible paper fibres, screen-printed ink, enamel game pieces. Landscape composition; action in the lower-right half; calm negative space in the upper-left; no horizon. Warm raking desk light with restrained shadows. Palette: parchment, deep blue-green, sea-glass green, coral red, muted mustard. No text, no letters, no numbers, no logos, no watermark, no flags, no weapons, no explosions, no realistic submarines, no people, no gradients, no neon, no photorealism.",
+  "review": "Accepted. No text artifacts, symbols, brands, people, weapons, seams, or anatomy issues are present. Palette and negative-space composition match the prompt sheet."
+}

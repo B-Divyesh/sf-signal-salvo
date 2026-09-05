@@ -1,0 +1,11 @@
+node_modules/
+dist/
+test-results/
+playwright-report/
+.factory/evidence/
+server/target/
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+graphify-out/
+.DS_Store

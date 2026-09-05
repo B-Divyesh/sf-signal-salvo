@@ -1,0 +1,101 @@
+:root {
+  color: #142f35;
+  background: #f4edda;
+  font: 17px/1.55 system-ui, sans-serif;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  background-color: #f4edda;
+  background-image: image-set(url('/assets/bathymetric-scene.avif') type('image/avif'), url('/assets/bathymetric-scene.webp') type('image/webp'));
+  background-position: center;
+  background-size: cover;
+  background-repeat: no-repeat;
+}
+
+main {
+  max-width: 36rem;
+  margin: 24px;
+  padding: 32px;
+  background: #fff9e9;
+  border: 2px solid #142f35;
+  box-shadow: 8px 8px 0 #142f35;
+}
+
+header,
+footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 16px max(20px, 5vw);
+  background: #142f35;
+  color: #fff9e9;
+}
+
+header a,
+footer a {
+  color: #fff9e9;
+}
+
+nav {
+  display: flex;
+  gap: 20px;
+}
+
+.wordmark {
+  font: 700 1.2rem Georgia, serif;
+}
+
+.skip-link {
+  position: fixed;
+  left: 16px;
+  top: 8px;
+  z-index: 2;
+  transform: translateY(-160%);
+}
+
+.skip-link:focus {
+  transform: none;
+}
+
+h1 {
+  font: 700 clamp(2rem, 8vw, 4rem) / 1 Georgia, serif;
+  margin: 0 0 16px;
+}
+
+.primary-link {
+  color: #fff9e9;
+  background: #142f35;
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  padding: 0 20px;
+  font-weight: 700;
+}
+
+a:focus-visible {
+  outline: 4px solid #e8b84d;
+  outline-offset: 4px;
+}
+
+footer {
+  align-items: flex-start;
+  flex-wrap: wrap;
+  font-size: 0.8rem;
+}
+
+footer p {
+  margin: 0;
+}
+
+@media (max-width: 520px) {
+  header,
+  footer {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}

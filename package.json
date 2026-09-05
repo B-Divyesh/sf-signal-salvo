@@ -1,0 +1,25 @@
+{
+  "name": "signal-salvo",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1",
+    "build": "tsc --noEmit && vite build",
+    "test:unit": "vitest run",
+    "test:backend": "cargo test --manifest-path server/Cargo.toml",
+    "test:e2e": "playwright test",
+    "test": "npm run build && npm run test:unit && npm run test:backend && playwright test",
+    "preview": "vite preview --host 127.0.0.1"
+  },
+  "devDependencies": {
+    "@axe-core/playwright": "4.10.2",
+    "@playwright/test": "1.58.2",
+    "typescript": "5.9.2",
+    "vite": "^7.3.6",
+    "vitest": "^3.2.7"
+  },
+  "overrides": {
+    "playwright-core": "1.58.2"
+  }
+}
