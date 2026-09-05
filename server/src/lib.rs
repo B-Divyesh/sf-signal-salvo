@@ -238,15 +238,16 @@ pub fn app_with_path(path: &Path) -> Result<Router, rusqlite::Error> {
                 .map_err(|_| rusqlite::Error::InvalidPath(path.into()))?;
         }
     }
+    // An existing database may live on an Azure Files mount whose lease is
+    // still settling while Container Apps swaps revisions. Opening the file is
+    // safe, but even a schema read can make SQLite attempt hot-journal recovery
+    // and fail the whole process with SQLITE_BUSY. The schema is immutable for
+    // this release, so only initialize a new file and let normal requests use
+    // the existing one after startup.
+    let database_exists = path.metadata().is_ok_and(|metadata| metadata.len() > 0);
     let connection = Connection::open(path)?;
     connection.busy_timeout(Duration::from_secs(5))?;
-    connection.pragma_update(None, "foreign_keys", true)?;
-    let schema_exists: bool = connection.query_row(
-        "SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type='table' AND name='rooms')",
-        [],
-        |row| row.get(0),
-    )?;
-    if !schema_exists {
+    if !database_exists {
         connection.execute_batch(
             "CREATE TABLE rooms (
            code TEXT PRIMARY KEY,
