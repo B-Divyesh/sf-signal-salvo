@@ -35,22 +35,22 @@ All normal text combinations are designed for at least 4.5:1 contrast. Coral is 
 ## Shape and interaction grammar
 
 - Panels resemble offset paper sheets: 2 px ink borders, small 2–6 px corner cuts, and hard 4 px shadows.
-- Queued commands appear as numbered paper chits. Reordering changes the visible numbers immediately.
+- Queued commands appear as numbered paper chits. Removing and replacing a command updates the visible order immediately.
 - Board cells are explicit buttons with row and column names. Color is always paired with a symbol or text.
 - Resolution advances as a short sequence of printed log lines, so outcomes remain legible without motion or sound.
 
 ## Motion and sound
 
-- Paper chits travel no more than 12 px over 180–240 ms when selected or reordered.
-- Sonar is one expanding ring over 500 ms. Damage uses one 90 ms board nudge, never a repeated flash.
+- Paper chits travel no more than 12 px over 180–240 ms when added.
+- Sonar is one expanding ring over 500 ms. Match results use updated integrity text and log lines without flashing.
 - `prefers-reduced-motion` removes translation, ring growth, and smooth scrolling. State changes remain visible through text and contrast.
 - Sound is off by default. A persistent setting enables short synthesized tones only after a user action. No audio asset or autoplay is used.
 
 ## Difficulty and session shape
 
-Each match has six simultaneous rounds. Players command two signal craft and queue exactly three commands per round. A visible current shifts every live craft after commands resolve. One sonar command per craft and exposed wake marks create readable partial information. A craft is disabled after two hits; the winner disables both opposing craft or has more integrity after round six. A draw is possible.
+Each match has six simultaneous rounds. Players command two signal craft and queue exactly three commands per round. A visible current shifts every live craft after commands resolve. Sonar commands and exposed wake marks create readable partial information. A craft is disabled after two hits; the winner disables both opposing craft or has more integrity after round six. A draw is possible.
 
-The sample match uses seed `SALVO-DEMO-17` and a deterministic opponent. Its scripted command sequence reaches an actual end screen in under three minutes during manual play and immediately in the regression runner. Online rooms target about ten minutes because players have up to 20 seconds to plan each round.
+The sample match uses seed `SALVO-DEMO-17` and a deterministic opponent. Its scripted command sequence reaches an actual end screen in under three minutes during manual play and immediately in the regression runner. Online rooms usually take two to four minutes because players have up to 20 seconds to plan each round.
 
 ## Asset plan and provenance
 
@@ -72,6 +72,6 @@ The generated source and prompt sidecar live in `assets/src/`. Shipping derivati
 ## Responsive intent
 
 - At 390 px the first screen shows the job, sample action, room entry, and full playable board without a horizontal page scroll.
-- The command library becomes a two-column grid and the round log moves below the board.
+- The command library stays in a compact three-column grid and the round log moves below the board.
 - On desktop, the board, status, and queue share one wide play surface while the introduction stays narrow.
 - At 200% text zoom, panels stack and no action is obscured by fixed chrome.

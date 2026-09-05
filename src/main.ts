@@ -68,7 +68,7 @@ const app: HTMLDivElement = appRoot;
 let mode: Mode = window.location.pathname === '/demo' ? 'demo' : 'idle';
 let demoGame: GameState = initialGame('SALVO-DEMO-17');
 let roomView: RoomView | null = null;
-let roomSession: RoomSession | null = loadRoomSession();
+let roomSession: RoomSession | null = mode === 'demo' ? null : loadRoomSession();
 let queue: Command[] = [];
 let selectedCraft: CraftId = 'Echo';
 let boardCursor = 0;
@@ -137,27 +137,40 @@ function route(moveFocus = false): void {
   stopPolling();
   const path = window.location.pathname.replace(/\/+$/, '') || '/';
   if (path === '/demo') {
+    if (mode !== 'demo') {
+      demoGame = initialGame('SALVO-DEMO-17');
+      queue = [];
+      selectedCraft = 'Echo';
+      statusMessage = 'Sample match loaded. Queue three commands or use the sample plan.';
+      errorMessage = '';
+    }
     mode = 'demo';
+    roomSession = null;
+    roomView = null;
     settings = loadSettings();
     document.title = 'Demo — Signal Salvo';
     setCanonical('/demo');
     renderGamePage(true);
   } else if (path === '/') {
-    if (mode === 'demo') mode = 'idle';
+    leaveDemoNamespace();
     settings = loadSettings();
     document.title = 'Signal Salvo — plan a two-player tactics match';
     setCanonical('/');
     renderGamePage(false);
-    if (!new URLSearchParams(window.location.search).has('room')) void resumeRoom();
+    const inviteCode = new URLSearchParams(window.location.search).get('room')?.toUpperCase();
+    if (!inviteCode || roomSession?.code === inviteCode) void resumeRoom();
   } else if (path === '/privacy') {
+    leaveDemoNamespace();
     document.title = 'Privacy — Signal Salvo';
     setCanonical('/privacy');
     renderInfoPage('privacy');
   } else if (path === '/terms') {
+    leaveDemoNamespace();
     document.title = 'Terms — Signal Salvo';
     setCanonical('/terms');
     renderInfoPage('terms');
   } else {
+    leaveDemoNamespace();
     document.title = 'Page not found — Signal Salvo';
     setCanonical(path);
     renderNotFound();
@@ -172,6 +185,17 @@ function route(moveFocus = false): void {
   }
 }
 
+function leaveDemoNamespace(): void {
+  if (mode !== 'demo') return;
+  localStorage.removeItem(DEMO_SETTINGS_KEY);
+  demoGame = initialGame('SALVO-DEMO-17');
+  queue = [];
+  roomView = null;
+  roomSession = loadRoomSession();
+  mode = 'idle';
+  settings = loadSettings();
+}
+
 function setCanonical(path: string): void {
   document.querySelector<HTMLLinkElement>('link[rel="canonical"]')?.setAttribute(
     'href',
@@ -180,6 +204,7 @@ function setCanonical(path: string): void {
 }
 
 function shell(content: string): string {
+  const currentPath = window.location.pathname;
   return `
     <a class="skip-link" href="#main">Skip to the game</a>
     <header class="site-header">
@@ -188,9 +213,9 @@ function shell(content: string): string {
         Signal Salvo
       </a>
       <nav aria-label="Main navigation">
-        <a href="/" data-route>Home</a>
-        <a href="/demo" data-route>Demo</a>
-        <a href="/privacy" data-route>Privacy</a>
+        <a href="/" data-route ${currentPath === '/' ? 'aria-current="page"' : ''}>Home</a>
+        <a href="/demo" data-route ${currentPath === '/demo' ? 'aria-current="page"' : ''}>Demo</a>
+        <a href="/privacy" data-route ${currentPath === '/privacy' ? 'aria-current="page"' : ''}>Privacy</a>
       </nav>
       <button class="quiet-button settings-button" type="button" data-open-settings>Settings</button>
     </header>
@@ -209,13 +234,14 @@ function shell(content: string): string {
   `;
 }
 
-function renderGamePage(demoRoute: boolean): void {
+function renderGamePage(demoRoute: boolean, nextFocus?: string): void {
+  const focusSelector = nextFocus ?? activeControlSelector();
   if (demoRoute && mode !== 'demo') mode = 'demo';
   const demoBanner = mode === 'demo' ? demoBannerHtml() : '';
-  const title = demoRoute ? 'Play a sample six-round tactics match' : 'Plan a six-round duel together';
+  const title = demoRoute ? 'Play a sample six-round tactics match' : 'Play a six-round tactics match';
   const intro = demoRoute
     ? 'Use a fixed opponent to learn the three-command turn before inviting a friend.'
-    : 'For two friends in a call who want tactics without downloads, accounts, or twitch reflexes.';
+    : 'For two friends on a call who want tactics without downloads, accounts, or twitch reflexes.';
   app.innerHTML = shell(`
     ${demoBanner}
     <main id="main">
@@ -263,6 +289,48 @@ function renderGamePage(demoRoute: boolean): void {
   bindCommonEvents();
   bindGameEvents();
   updateCountdown();
+  restoreGameFocus(focusSelector);
+}
+
+function activeControlSelector(): string | undefined {
+  const active = document.activeElement;
+  if (!(active instanceof HTMLElement) || !app.contains(active)) return undefined;
+  const attributes = [
+    'data-command',
+    'data-select-craft',
+    'data-remove-command',
+    'data-cell',
+    'data-lock-plan',
+    'data-clear-plan',
+    'data-sample-plan',
+    'data-create-room',
+    'data-copy-invite',
+    'data-leave-room',
+    'data-rematch',
+    'data-reset-demo',
+    'data-start-real',
+    'data-start-demo',
+    'data-join-room',
+    'data-open-settings',
+  ];
+  for (const attribute of attributes) {
+    if (!active.hasAttribute(attribute)) continue;
+    const value = active.getAttribute(attribute);
+    return value ? `[${attribute}="${CSS.escape(value)}"]` : `[${attribute}]`;
+  }
+  return active.id ? `#${CSS.escape(active.id)}` : undefined;
+}
+
+function restoreGameFocus(selector?: string): void {
+  if (!selector) return;
+  requestAnimationFrame(() => {
+    const target = document.querySelector<HTMLElement>(selector);
+    if (target instanceof HTMLButtonElement && target.disabled) {
+      document.querySelector<HTMLElement>('#planner-title, #end-title, #game-title')?.focus({ preventScroll: true });
+      return;
+    }
+    target?.focus({ preventScroll: true });
+  });
 }
 
 function roomEntryHtml(): string {
@@ -274,8 +342,8 @@ function roomEntryHtml(): string {
       <form data-join-form>
         <label for="room-code">Room code</label>
         <div class="join-row">
-          <input id="room-code" name="roomCode" value="${escapeHtml(inviteCode)}" minlength="5" maxlength="5" autocomplete="off" autocapitalize="characters" spellcheck="false" required aria-describedby="room-code-help" />
-          <button class="quiet-button" type="submit">Join room</button>
+          <input id="room-code" name="roomCode" value="${escapeHtml(inviteCode)}" minlength="5" maxlength="5" autocomplete="off" autocapitalize="characters" spellcheck="false" required aria-describedby="room-code-help app-error" aria-invalid="${errorMessage ? 'true' : 'false'}" />
+          <button class="quiet-button" type="submit" data-join-room>Join room</button>
         </div>
         <span id="room-code-help">Enter the five letters from your friend.</span>
       </form>
@@ -319,6 +387,9 @@ function viewModel(): RoomView {
 
 function gamePanelHtml(): string {
   const view = viewModel();
+  if (!view.own.some((craft) => craft.id === selectedCraft && craft.integrity > 0)) {
+    selectedCraft = view.own.find((craft) => craft.integrity > 0)?.id ?? 'Echo';
+  }
   const isPlayable = mode !== 'idle' && view.phase !== 'waiting' && view.phase !== 'finished';
   const heading =
     mode === 'idle'
@@ -343,7 +414,7 @@ function gamePanelHtml(): string {
       ${view.phase === 'waiting' ? waitingRoomHtml(view) : boardAndControlsHtml(view, isPlayable)}
       <div class="message-stack">
         <p class="status-message" role="status" aria-live="polite">${escapeHtml(statusMessage)}</p>
-        <p class="error-message" role="alert">${escapeHtml(errorMessage)}</p>
+        <p class="error-message" id="app-error" role="alert">${escapeHtml(errorMessage)}</p>
       </div>
     </section>
   `;
@@ -424,7 +495,7 @@ function commandControlsHtml(view: RoomView, isPlayable: boolean): string {
       <div class="planner-title-row">
         <div>
           <p class="small-label">Your private plan</p>
-          <h3 id="planner-title">Queue three commands</h3>
+          <h3 id="planner-title" tabindex="-1">Queue three commands</h3>
         </div>
         <button class="text-button" type="button" data-clear-plan ${locked || queue.length === 0 ? 'disabled' : ''}>Clear plan</button>
       </div>
@@ -468,7 +539,7 @@ function endScreenHtml(view: RoomView): string {
   return `
     <section class="end-screen" aria-labelledby="end-title" data-end-screen>
       <p class="small-label">Final result</p>
-      <h3 id="end-title">${title}</h3>
+      <h3 id="end-title" tabindex="-1">${title}</h3>
       <p>You kept ${ownTotal} integrity. The other side kept ${otherTotal}.</p>
       ${mode === 'demo'
         ? '<button class="primary-button" type="button" data-restart-sample>Play the sample again</button>'
@@ -527,10 +598,16 @@ function bindGameEvents(): void {
   });
   document.querySelector<HTMLButtonElement>('[data-copy-invite]')?.addEventListener('click', (event) => {
     const target = event.currentTarget as HTMLButtonElement;
-    void navigator.clipboard.writeText(target.dataset.invite ?? '').then(() => {
-      statusMessage = 'Invite link copied.';
-      renderGamePage(false);
-    });
+    void navigator.clipboard
+      .writeText(target.dataset.invite ?? '')
+      .then(() => {
+        statusMessage = 'Invite link copied.';
+        renderGamePage(false);
+      })
+      .catch(() => {
+        errorMessage = 'The browser blocked copying. Select the address bar and copy the invite link there.';
+        renderGamePage(false);
+      });
   });
   document.querySelectorAll<HTMLButtonElement>('[data-leave-room]').forEach((button) => {
     button.addEventListener('click', leaveRoom);
@@ -538,13 +615,13 @@ function bindGameEvents(): void {
   document.querySelector<HTMLButtonElement>('[data-clear-plan]')?.addEventListener('click', () => {
     queue = [];
     statusMessage = 'Plan cleared.';
-    renderGamePage(mode === 'demo');
+    renderGamePage(mode === 'demo', '[data-command="advance"]');
   });
   document.querySelectorAll<HTMLButtonElement>('[data-select-craft]').forEach((button) => {
     button.addEventListener('click', () => {
       selectedCraft = button.dataset.selectCraft as CraftId;
       statusMessage = `${selectedCraft} selected.`;
-      renderGamePage(mode === 'demo');
+      renderGamePage(mode === 'demo', `[data-select-craft="${selectedCraft}"]`);
     });
   });
   document.querySelectorAll<HTMLButtonElement>('[data-command]').forEach((button) => {
@@ -554,20 +631,23 @@ function bindGameEvents(): void {
       queue.push({ craft: selectedCraft, action });
       statusMessage = `${selectedCraft}: ${actionLabel(action)} added as command ${queue.length}.`;
       playTone(360 + queue.length * 80);
-      renderGamePage(mode === 'demo');
+      renderGamePage(
+        mode === 'demo',
+        queue.length === PLAN_SIZE ? '[data-lock-plan]' : `[data-command="${action}"]`,
+      );
     });
   });
   document.querySelectorAll<HTMLButtonElement>('[data-remove-command]').forEach((button) => {
     button.addEventListener('click', () => {
       queue.splice(Number(button.dataset.removeCommand), 1);
       statusMessage = 'Command removed.';
-      renderGamePage(mode === 'demo');
+      renderGamePage(mode === 'demo', '[data-command="advance"]');
     });
   });
   document.querySelector<HTMLButtonElement>('[data-sample-plan]')?.addEventListener('click', () => {
     queue = sampleSuggestedPlan(demoGame.round);
     statusMessage = 'A sample plan is ready. Lock it when you are ready.';
-    renderGamePage(true);
+    renderGamePage(true, '[data-lock-plan]');
   });
   document.querySelector<HTMLButtonElement>('[data-lock-plan]')?.addEventListener('click', () => void lockPlan());
   document.querySelector<HTMLButtonElement>('[data-restart-sample]')?.addEventListener('click', resetDemo);
@@ -583,21 +663,19 @@ function selectCell(cell: HTMLButtonElement): void {
   if (cell.dataset.craft) {
     selectedCraft = cell.dataset.craft as CraftId;
     statusMessage = `${selectedCraft} selected from the board.`;
-    renderGamePage(mode === 'demo');
+    renderGamePage(mode === 'demo', `[data-cell="${boardCursor}"]`);
   }
 }
 
 function handleBoardKey(event: KeyboardEvent): void {
-  const moves: Record<string, number> = {
-    ArrowLeft: -1,
-    ArrowRight: 1,
-    ArrowUp: -BOARD_WIDTH,
-    ArrowDown: BOARD_WIDTH,
-  };
-  if (!(event.key in moves)) return;
+  if (!['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.key)) return;
   event.preventDefault();
   const current = Number((event.currentTarget as HTMLElement).dataset.cell);
-  const next = Math.max(0, Math.min(BOARD_WIDTH * BOARD_HEIGHT - 1, current + moves[event.key]));
+  const x = current % BOARD_WIDTH;
+  const y = Math.floor(current / BOARD_WIDTH);
+  const nextX = event.key === 'ArrowLeft' ? Math.max(0, x - 1) : event.key === 'ArrowRight' ? Math.min(BOARD_WIDTH - 1, x + 1) : x;
+  const nextY = event.key === 'ArrowUp' ? Math.max(0, y - 1) : event.key === 'ArrowDown' ? Math.min(BOARD_HEIGHT - 1, y + 1) : y;
+  const next = nextY * BOARD_WIDTH + nextX;
   boardCursor = next;
   const cells = document.querySelectorAll<HTMLButtonElement>('[data-cell]');
   cells.forEach((cell) => (cell.tabIndex = Number(cell.dataset.cell) === next ? 0 : -1));
@@ -630,6 +708,8 @@ function resetDemo(): void {
 function startReal(): void {
   localStorage.removeItem(DEMO_SETTINGS_KEY);
   mode = 'idle';
+  roomSession = loadRoomSession();
+  roomView = null;
   queue = [];
   statusMessage = 'Create a room or enter a friend’s code.';
   navigate('/');
@@ -647,7 +727,7 @@ async function lockPlan(): Promise<void> {
     const plan = structuredClone(queue);
     queue = [];
     statusMessage = 'Both sample plans are resolving.';
-    renderGamePage(true);
+    renderGamePage(true, demoGame.status === 'finished' ? '#end-title' : '[data-sample-plan]');
     await delay(settings.motion && !prefersReducedMotion() ? 240 : 0);
     demoGame = resolveRound(demoGame, {
       A: plan,
@@ -663,13 +743,27 @@ async function lockPlan(): Promise<void> {
     roomView = await api<RoomView>(`/api/rooms/${roomSession.code}/commands`, {
       method: 'POST',
       token: roomSession.token,
-      body: { commands: queue },
+      body: { round: roomView?.round, commands: queue },
     });
+    if (roomView.phase === 'finished') saveRoomSession(null);
     queue = [];
     statusMessage = roomView.queueLocked ? 'Plan locked. Waiting for your friend.' : `Round ${roomView.round} is ready.`;
-    renderGamePage(false);
+    renderGamePage(false, roomView.phase === 'finished' ? '#end-title' : '#planner-title');
     startPolling();
   } catch (error) {
+    if (error instanceof ApiError && error.status === 409 && roomSession) {
+      try {
+        roomView = await fetchRoom();
+        queue = [];
+        errorMessage = error.message;
+        statusMessage = roomView.phase === 'finished' ? 'The match is complete.' : `Round ${roomView.round} is ready.`;
+        renderGamePage(false, roomView.phase === 'finished' ? '#end-title' : '#planner-title');
+        startPolling();
+        return;
+      } catch {
+        // Fall through to the connection guidance below.
+      }
+    }
     showApiError(error);
   }
 }
@@ -880,7 +974,7 @@ function termsHtml(): string {
   return `
     <section><h2>Free access</h2><p>Signal Salvo is free. It has no purchases, subscriptions, prizes, or gambling mechanics.</p></section>
     <section><h2>Fair play</h2><p>Do not automate requests, disrupt rooms, guess tokens, or use the service to harm another person.</p><p>Room codes are short invitations. Share a code only with the person you want to play.</p></section>
-    <section><h2>Availability</h2><p>The game is provided as available. A room may end if the service restarts or its 24-hour retention limit passes.</p><p>You may stop using the game at any time. Leaving a room removes its token from your browser.</p></section>
+    <section><h2>Availability</h2><p>The game is provided as available. Active rooms and locked plans survive a room-service restart.</p><p>Inactive room records may be removed. Leaving a room removes its token from your browser.</p></section>
     <section><h2>Contact</h2><p>For a terms question, email <a href="mailto:privacy@sociobot.in">privacy@sociobot.in</a>.</p></section>
   `;
 }

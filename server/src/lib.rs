@@ -216,6 +216,7 @@ struct JoinResponse {
 
 #[derive(Deserialize)]
 struct SubmitCommands {
+    round: u8,
     commands: Vec<Command>,
 }
 
@@ -240,8 +241,7 @@ pub fn app_with_path(path: &Path) -> Result<Router, rusqlite::Error> {
     let connection = Connection::open(path)?;
     connection.busy_timeout(Duration::from_secs(5))?;
     connection.execute_batch(
-        "PRAGMA journal_mode=DELETE;
-         PRAGMA foreign_keys=ON;
+        "PRAGMA foreign_keys=ON;
          CREATE TABLE IF NOT EXISTS rooms (
            code TEXT PRIMARY KEY,
            phase TEXT NOT NULL,
@@ -472,6 +472,19 @@ async fn submit_commands(
     let mut row = load_room(&connection, &code)?
         .ok_or_else(|| AppError::new(StatusCode::NOT_FOUND, "That room code was not found."))?;
     let player = authenticate(&row, &token)?;
+    if row.phase == "planning" && row.deadline_ms.is_some_and(|deadline| deadline <= now_ms()) {
+        resolve_stored_round(&connection, &mut row)?;
+        return Err(AppError::new(
+            StatusCode::CONFLICT,
+            "This round ended before the plan arrived. Review the new board and queue another plan.",
+        ));
+    }
+    if input.round != row.state.round {
+        return Err(AppError::new(
+            StatusCode::CONFLICT,
+            "The board advanced before this plan arrived. Review the new round and queue another plan.",
+        ));
+    }
     if row.phase != "planning" {
         return Err(AppError::new(
             StatusCode::CONFLICT,
@@ -1018,33 +1031,58 @@ fn resolve_round(previous: &GameState, plan_a: &[Command], plan_b: &[Command]) -
 fn apply_current(state: &mut GameState, log: &mut Vec<String>) {
     let (dx, dy) = vector(state.current);
     let snapshot = state.clone();
-    let mut moved = 0;
-    for player in [Player::A, Player::B] {
-        let original = crafts(&snapshot, player).clone();
-        for source in original.into_iter().filter(|craft| craft.integrity > 0) {
-            let x = source.x + dx;
-            let y = source.y + dy;
-            let occupied = snapshot
-                .crafts_a
+    let proposals: Vec<(Player, CraftId, i32, i32, i32, i32)> = [Player::A, Player::B]
+        .into_iter()
+        .flat_map(|player| {
+            crafts(&snapshot, player)
                 .iter()
-                .chain(snapshot.crafts_b.iter())
-                .any(|craft| craft.integrity > 0 && craft.x == x && craft.y == y);
-            if inside(x, y) && !occupied {
-                if let Some(craft) = crafts_mut(state, player)
-                    .iter_mut()
-                    .find(|craft| craft.id == source.id)
-                {
-                    craft.x = x;
-                    craft.y = y;
-                }
-                contacts_mut(state, player.other()).push(Contact {
-                    x: source.x,
-                    y: source.y,
-                    kind: ContactKind::Wake,
-                });
-                moved += 1;
-            }
+                .filter(|craft| craft.integrity > 0)
+                .map(move |craft| {
+                    (
+                        player,
+                        craft.id,
+                        craft.x,
+                        craft.y,
+                        craft.x + dx,
+                        craft.y + dy,
+                    )
+                })
+        })
+        .collect();
+    let mut moved = 0;
+    for (player, id, old_x, old_y, x, y) in proposals.clone() {
+        if !inside(x, y) {
+            continue;
         }
+        let duplicate_target = proposals
+            .iter()
+            .filter(|proposal| proposal.4 == x && proposal.5 == y)
+            .count()
+            > 1;
+        let occupied = snapshot
+            .crafts_a
+            .iter()
+            .chain(snapshot.crafts_b.iter())
+            .any(|craft| craft.integrity > 0 && craft.x == x && craft.y == y);
+        let target_will_leave = proposals
+            .iter()
+            .any(|proposal| proposal.2 == x && proposal.3 == y && inside(proposal.4, proposal.5));
+        if duplicate_target || (occupied && !target_will_leave) {
+            continue;
+        }
+        if let Some(craft) = crafts_mut(state, player)
+            .iter_mut()
+            .find(|craft| craft.id == id)
+        {
+            craft.x = x;
+            craft.y = y;
+        }
+        contacts_mut(state, player.other()).push(Contact {
+            x: old_x,
+            y: old_y,
+            kind: ContactKind::Wake,
+        });
+        moved += 1;
     }
     log.push(format!(
         "The {:?} current shifted {} craft.",
@@ -1069,6 +1107,32 @@ mod tests {
     use super::*;
     use axum::{body::to_bytes, http::Request};
     use tower::ServiceExt;
+
+    async fn create_test_room(app: &Router) -> serde_json::Value {
+        let response = app
+            .clone()
+            .oneshot(Request::post("/api/rooms").body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        serde_json::from_slice(&body).unwrap()
+    }
+
+    async fn join_test_room(app: &Router, code: &str) -> serde_json::Value {
+        let response = app
+            .clone()
+            .oneshot(
+                Request::post(format!("/api/rooms/{code}/join"))
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        serde_json::from_slice(&body).unwrap()
+    }
 
     fn plan(round: u8, player: Player) -> Vec<Command> {
         if round == 1 {
@@ -1139,6 +1203,7 @@ mod tests {
         let path = temporary.path().join("rooms.sqlite");
         let app = app_with_path(&path).unwrap();
         let response = app
+            .clone()
             .oneshot(Request::post("/api/rooms").body(Body::empty()).unwrap())
             .await
             .unwrap();
@@ -1146,10 +1211,166 @@ mod tests {
         let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
         let created: serde_json::Value = serde_json::from_slice(&body).unwrap();
         let code = created["code"].as_str().unwrap();
-        let token = created["token"].as_str().unwrap();
+        let token_a = created["token"].as_str().unwrap();
+        let joined = join_test_room(&app, code).await;
+        let token_b = joined["token"].as_str().unwrap();
+        let locked_plan = serde_json::json!({ "round": 1, "commands": plan(1, Player::A) });
+        let response = app
+            .clone()
+            .oneshot(
+                Request::post(format!("/api/rooms/{code}/commands"))
+                    .header(header::CONTENT_TYPE, "application/json")
+                    .header("x-player-token", token_a)
+                    .body(Body::from(locked_plan.to_string()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
 
         let reopened = app_with_path(&path).unwrap();
         let response = reopened
+            .clone()
+            .oneshot(
+                Request::get(format!("/api/rooms/{code}"))
+                    .header("x-player-token", token_a)
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let restored: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(restored["round"], 1);
+        assert_eq!(restored["queueLocked"], true);
+
+        let completing_plan = serde_json::json!({ "round": 1, "commands": plan(1, Player::B) });
+        let response = reopened
+            .oneshot(
+                Request::post(format!("/api/rooms/{code}/commands"))
+                    .header(header::CONTENT_TYPE, "application/json")
+                    .header("x-player-token", token_b)
+                    .body(Body::from(completing_plan.to_string()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let resolved: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(resolved["round"], 2);
+    }
+
+    #[test]
+    fn current_moves_adjacent_craft_as_one_line() {
+        let mut game = initial_game("current-line".into());
+        game.current = Direction::E;
+        game.crafts_a[0].x = 1;
+        game.crafts_a[0].y = 3;
+        game.crafts_a[1].x = 2;
+        game.crafts_a[1].y = 3;
+        game.crafts_b[0].x = 3;
+        game.crafts_b[0].y = 3;
+        game.crafts_b[1].x = 4;
+        game.crafts_b[1].y = 3;
+        let mut log = vec![];
+
+        apply_current(&mut game, &mut log);
+
+        assert_eq!(game.crafts_a[0].x, 2);
+        assert_eq!(game.crafts_a[1].x, 3);
+        assert_eq!(game.crafts_b[0].x, 4);
+        assert_eq!(game.crafts_b[1].x, 5);
+        assert!(log.iter().any(|line| line.contains("shifted 4 craft")));
+    }
+
+    #[tokio::test]
+    async fn health_reports_the_running_build() {
+        let temporary = tempfile::tempdir().unwrap();
+        let app = app_with_path(&temporary.path().join("rooms.sqlite")).unwrap();
+        let response = app
+            .oneshot(Request::get("/health").body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let health: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(health["ok"], true);
+        assert_eq!(health["buildSha"], BUILD_SHA);
+    }
+
+    #[tokio::test]
+    async fn room_tokens_are_hashed_and_cannot_cross_rooms() {
+        let temporary = tempfile::tempdir().unwrap();
+        let path = temporary.path().join("rooms.sqlite");
+        let app = app_with_path(&path).unwrap();
+        let first = create_test_room(&app).await;
+        let second = create_test_room(&app).await;
+        let first_token = first["token"].as_str().unwrap();
+        let first_code = first["code"].as_str().unwrap();
+        let second_code = second["code"].as_str().unwrap();
+
+        let connection = Connection::open(&path).unwrap();
+        let stored_hash: String = connection
+            .query_row(
+                "SELECT token_a_hash FROM rooms WHERE code=?1",
+                [first_code],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_ne!(stored_hash, first_token);
+        assert_eq!(stored_hash, hash_token(first_token));
+
+        let response = app
+            .oneshot(
+                Request::get(format!("/api/rooms/{second_code}"))
+                    .header("x-player-token", first_token)
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+    }
+
+    #[tokio::test]
+    async fn a_plan_arriving_after_the_deadline_cannot_change_the_finished_round() {
+        let temporary = tempfile::tempdir().unwrap();
+        let path = temporary.path().join("rooms.sqlite");
+        let app = app_with_path(&path).unwrap();
+        let created = create_test_room(&app).await;
+        let code = created["code"].as_str().unwrap();
+        let token = created["token"].as_str().unwrap();
+        join_test_room(&app, code).await;
+
+        Connection::open(&path)
+            .unwrap()
+            .execute("UPDATE rooms SET deadline_ms=0 WHERE code=?1", [code])
+            .unwrap();
+        let late_plan = serde_json::json!({
+            "round": 1,
+            "commands": [
+                {"craft": "Echo", "action": "pulse"},
+                {"craft": "Kilo", "action": "pulse"},
+                {"craft": "Echo", "action": "sonar"}
+            ]
+        });
+        let response = app
+            .clone()
+            .oneshot(
+                Request::post(format!("/api/rooms/{code}/commands"))
+                    .header(header::CONTENT_TYPE, "application/json")
+                    .header("x-player-token", token)
+                    .body(Body::from(late_plan.to_string()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::CONFLICT);
+
+        let response = app
+            .clone()
             .oneshot(
                 Request::get(format!("/api/rooms/{code}"))
                     .header("x-player-token", token)
@@ -1159,6 +1380,23 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(response.status(), StatusCode::OK);
+        let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let view: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(view["round"], 2);
+        assert_eq!(view["opponentIntegrity"][0]["integrity"], 2);
+        assert_eq!(view["opponentIntegrity"][1]["integrity"], 2);
+
+        let stale_response = app
+            .oneshot(
+                Request::post(format!("/api/rooms/{code}/commands"))
+                    .header(header::CONTENT_TYPE, "application/json")
+                    .header("x-player-token", token)
+                    .body(Body::from(late_plan.to_string()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(stale_response.status(), StatusCode::CONFLICT);
     }
 
     #[tokio::test]

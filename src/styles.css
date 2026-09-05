@@ -102,6 +102,7 @@ button:disabled {
 
 .wordmark {
   display: inline-flex;
+  min-width: 44px;
   min-height: 44px;
   align-items: center;
   gap: 10px;
@@ -510,6 +511,7 @@ h3 {
   border: 3px solid var(--coral);
   border-radius: 50%;
   box-shadow: 0 0 0 3px rgb(255 249 233 / 70%);
+  animation: sonar-in 500ms ease-out;
 }
 
 .wake-contact {
@@ -647,6 +649,17 @@ h3 {
   color: var(--ink);
   background: #f6db9c;
   border-color: var(--coral);
+  animation: chit-in 200ms ease-out;
+}
+
+@keyframes sonar-in {
+  from { opacity: 0.25; transform: scale(0.55); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+@keyframes chit-in {
+  from { opacity: 0.4; transform: translateX(-12px); }
+  to { opacity: 1; transform: translateX(0); }
 }
 
 .queue-list li > span {
@@ -812,6 +825,15 @@ h3 {
 
 .boundaries-section p {
   max-width: 60ch;
+}
+
+.boundaries-section a,
+.document-page a,
+.site-footer a {
+  display: inline-flex;
+  min-width: 44px;
+  min-height: 44px;
+  align-items: center;
 }
 
 .paper-orbit {
@@ -980,6 +1002,7 @@ dialog::backdrop { background: rgb(20 47 53 / 72%); }
 
   .site-header {
     min-height: 64px;
+    flex-wrap: wrap;
     gap: 12px;
     padding: 8px 16px;
   }
@@ -996,6 +1019,7 @@ dialog::backdrop { background: rgb(20 47 53 / 72%); }
   .settings-button {
     min-width: 64px;
     width: auto;
+    margin-left: auto;
     color: var(--ink);
     font-size: 0.72rem;
   }
@@ -1018,7 +1042,7 @@ dialog::backdrop { background: rgb(20 47 53 / 72%); }
 
   .first-screen {
     min-height: auto;
-    padding: 24px 16px 48px;
+    padding: 24px 12px 48px;
     gap: 32px;
   }
 
@@ -1036,9 +1060,9 @@ dialog::backdrop { background: rgb(20 47 53 / 72%); }
   }
 
   .game-shell {
-    width: calc(100% + 12px);
-    margin-inline: -6px;
-    padding: 8px;
+    width: calc(100% + 8px);
+    margin-inline: -4px;
+    padding: 6px;
     box-shadow: 5px 5px 0 rgb(20 47 53 / 92%);
   }
 

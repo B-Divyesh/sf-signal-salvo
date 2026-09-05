@@ -2,7 +2,7 @@
 
 Signal Salvo is a free two-player browser tactics game for friends in a call. Each player secretly queues three commands, then both plans resolve together across six rounds. The intended session is one short call and needs no account or download.
 
-The first release includes room codes, two signal craft per player, changing currents, sonar contacts, pulse damage, reconnection during a match, an end screen, and one-tap rematches. It does not include matchmaking, rankings, progression, purchases, or realistic military imagery.
+The first release includes room codes, two craft per player, currents, sonar, pulse damage, reconnects, an end screen, and rematches. It does not include matchmaking, rankings, progression, purchases, or realistic military imagery.
 
 ## Try the sample
 
@@ -23,7 +23,7 @@ In another terminal:
 npm run dev
 ```
 
-The client opens at `http://127.0.0.1:5173`. It uses the room service at `http://127.0.0.1:8787`. With no configuration, the server listens on port 8080 and stores SQLite beside its binary. Set `PORT=8787` for the documented local client. Set `SIGNAL_SALVO_DB` only when a local database path is useful.
+The client opens at `http://127.0.0.1:5173`. It uses the room service at `http://127.0.0.1:8787`. With no configuration, the server listens on port 8080 and stores SQLite in its working directory. Set `PORT=8787` for the documented local client. Set `SIGNAL_SALVO_DB` only when a local database path is useful.
 
 ## Test every claim
 
@@ -57,7 +57,7 @@ WO_DATA_DIR=/data /opt/fleet/lib/deploy-container.sh signal-salvo-realtime . Doc
 /opt/fleet/lib/deploy-static.sh signal-salvo dist
 ```
 
-The container starts with only `PORT`; it generates random player tokens for each room and stores only token hashes. `/health` returns the implementation build SHA. The static client allows connections only to the product-owned realtime origin.
+The container starts with only `PORT` and generates random player tokens for each room. Active rooms and locked plans survive a service restart on the durable `/data` mount. `/health` returns the implementation build SHA. The static client allows connections only to the product-owned realtime origin.
 
 ## Privacy
 

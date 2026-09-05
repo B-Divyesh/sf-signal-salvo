@@ -8,4 +8,4 @@
 - Reset: select **Reset demo** in the persistent banner or **Play the sample again** on the end screen.
 - Leave: select **Start for real**. This clears the demo settings namespace and opens the real room controls.
 
-The sample runs entirely in browser memory. It does not call the room API. Its only optional localStorage key is `demo:signal-salvo:settings`; real settings use `signal-salvo:settings`, and a real reconnect session uses `signal-salvo:real-session`.
+The sample runs entirely in browser memory. It does not call the room API. Its only optional localStorage key is `demo:signal-salvo:settings`; real settings use `signal-salvo:settings`, and a real reconnect session uses `signal-salvo:real-session`. Resetting or leaving the sample deletes the demo key without changing either real key.

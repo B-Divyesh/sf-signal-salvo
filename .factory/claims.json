@@ -29,10 +29,17 @@
   },
   {
     "id": "demo-private",
-    "claim": "The sample match sends no game commands outside its page and writes no real-room data.",
-    "where": "Demo banner and privacy page",
+    "claim": "The sample uses a separate namespace and loads no analytics, ads, trackers, external fonts, or third-party scripts.",
+    "where": "Landing facts, demo banner, privacy page, and README",
     "test": "npm test -- --grep @claim:demo-private",
     "sandbox": "Fresh browser context; record all requests during one sample round and inspect localStorage."
+  },
+  {
+    "id": "online-network-private",
+    "claim": "Online play contacts only the Signal Salvo site and its product-owned room service.",
+    "where": "Landing privacy section, privacy page, and README",
+    "test": "npm test -- --grep @claim:online-network-private",
+    "sandbox": "Fresh browser context; record every request while creating a real local room and assert only the static site and local room service origins appear."
   },
   {
     "id": "online-two-player",
@@ -40,6 +47,20 @@
     "where": "Landing page, game planner, and README",
     "test": "npm test -- --grep @claim:online-two-player",
     "sandbox": "Two isolated Chromium contexts use the local Rust service to create, join, play six rounds, and reach both end screens."
+  },
+  {
+    "id": "room-reconnect",
+    "claim": "Either player can reload during a match and recover the same private room state.",
+    "where": "README",
+    "test": "npm test -- --grep @claim:room-reconnect",
+    "sandbox": "Two isolated Chromium contexts join a room; one locks a plan, both reload, and each recovers only its own view."
+  },
+  {
+    "id": "online-rematch",
+    "claim": "A finisher can create a fresh rematch room from the result screen.",
+    "where": "Online result screen and README",
+    "test": "npm test -- --grep @claim:online-rematch",
+    "sandbox": "Two isolated Chromium contexts finish a room; one selects Create a rematch and receives a different room code."
   },
   {
     "id": "room-token-expiry",
@@ -50,9 +71,23 @@
   },
   {
     "id": "free-no-account",
-    "claim": "A visitor can create a free room without an account or payment step.",
+    "claim": "A visitor can create a free room without an account, payment step, or download.",
     "where": "Landing page and terms page",
     "test": "npm test -- --grep @claim:free-no-account",
-    "sandbox": "Fresh browser context; verify no credential form, create a room, and inspect the resulting path."
+    "sandbox": "Fresh browser context; verify no credential or download flow, create a room, and inspect the resulting path."
+  },
+  {
+    "id": "service-health",
+    "claim": "The room service health endpoint reports its running build.",
+    "where": "README",
+    "test": "npm test -- --grep @claim:service-health",
+    "sandbox": "Start the local Rust service, request /health, and assert a healthy response with a concrete build identifier."
+  },
+  {
+    "id": "room-restart-persistence",
+    "claim": "An active room and its locked plan survive a room-service restart.",
+    "where": "README and terms page",
+    "test": "npm test -- --grep @claim:room-restart-persistence",
+    "sandbox": "Create and join a room on an isolated Rust service, lock one plan, restart the real process on the same SQLite file, and finish the round."
   }
 ]

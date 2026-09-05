@@ -7,8 +7,8 @@ Audited 2026-09-05. Counts treat hyphenated terms and numerals as one word. Head
 | Copy | Words |
 | --- | ---: |
 | Two-player browser tactics | 3 |
-| Plan a six-round duel together | 5 |
-| For two friends in a call who want tactics without downloads, accounts, or twitch reflexes. | 15 |
+| Play a six-round tactics match | 6 |
+| For two friends on a call who want tactics without downloads, accounts, or twitch reflexes. | 15 |
 | Try it with sample data | 5 |
 | Starts a fixed match against a sample opponent. | 8 |
 | Free to play | 3 |
