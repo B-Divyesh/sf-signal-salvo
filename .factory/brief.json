@@ -1,0 +1,32 @@
+{
+  "slug": "signal-salvo",
+  "title": "Signal Salvo",
+  "territory": "games-creative",
+  "user": "Two friends in a call who want a ten-minute tactical duel without a download, account, twitch reflex requirement, or waiting through turns.",
+  "evidence": [
+    {
+      "url": "https://hn.algolia.com/api/v1/items/48042110",
+      "date": "2026-05-06",
+      "quote_or_summary": "Naval Strike launches as no-signup simultaneous planning; players ask for more dynamic movement and clearer multi-turn planning."
+    },
+    {
+      "url": "https://hn.algolia.com/api/v1/items/49080616",
+      "date": "2026-07-28",
+      "quote_or_summary": "Dino Race is presented as a peer-to-peer two-player browser game, with HN readers calling the concept fun."
+    }
+  ],
+  "recurrence": "Two independent 2026 browser releases select two-player, no-install play; feedback asks for richer planning rather than more spectacle.",
+  "current_workaround": "Share a chess/board-game link, use a turn-based app, or play an action game that punishes network delay.",
+  "incumbents_and_gap": "Chess sites are deep but commitment-heavy; Battleship variants hide too much information. Browser P2P examples show room-code delivery is viable but do not center simultaneous readable tactics.",
+  "smallest_useful_product": "Room-code 1v1: each player secretly queues three commands for a tiny submarine squad, then both resolve in 20-second pulses across 6 rounds. A changing current and one revealed sonar ping make each run distinct. Non-goals: progression, ranked ladder, matchmaking, or military realism.",
+  "success_measure": "60% of created rooms complete a full match and 25% of finishers immediately request a rematch.",
+  "artifact_class": "browser-game",
+  "monetization": "free \u2014 the room-code invitation is the acquisition loop.",
+  "constraints": "Authoritative lightweight backend must prevent command peeking; reconnect token expires after a match; keep art abstract to avoid real-world conflict framing.",
+  "est_build_effort": "M",
+  "scale": "small (default)",
+  "why_distinct": "Simultaneous command queues make latency-tolerant mind games, not a clone of chess, Snake, or Battleship.",
+  "confidence": 4,
+  "state": "RESEARCHED",
+  "research_run": "research-browser-games-0901-204325-2"
+}
