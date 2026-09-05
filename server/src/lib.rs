@@ -240,9 +240,15 @@ pub fn app_with_path(path: &Path) -> Result<Router, rusqlite::Error> {
     }
     let connection = Connection::open(path)?;
     connection.busy_timeout(Duration::from_secs(5))?;
-    connection.execute_batch(
-        "PRAGMA foreign_keys=ON;
-         CREATE TABLE IF NOT EXISTS rooms (
+    connection.pragma_update(None, "foreign_keys", true)?;
+    let schema_exists: bool = connection.query_row(
+        "SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type='table' AND name='rooms')",
+        [],
+        |row| row.get(0),
+    )?;
+    if !schema_exists {
+        connection.execute_batch(
+            "CREATE TABLE rooms (
            code TEXT PRIMARY KEY,
            phase TEXT NOT NULL,
            deadline_ms INTEGER,
@@ -256,8 +262,9 @@ pub fn app_with_path(path: &Path) -> Result<Router, rusqlite::Error> {
            created_at_ms INTEGER NOT NULL,
            updated_at_ms INTEGER NOT NULL
          );
-         CREATE INDEX IF NOT EXISTS rooms_updated_idx ON rooms(updated_at_ms);",
-    )?;
+         CREATE INDEX rooms_updated_idx ON rooms(updated_at_ms);",
+        )?;
+    }
     let state = Arc::new(AppState {
         database: Arc::new(Mutex::new(connection)),
         limiter: Arc::new(Mutex::new(HashMap::new())),
@@ -1260,6 +1267,23 @@ mod tests {
         let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
         let resolved: serde_json::Value = serde_json::from_slice(&body).unwrap();
         assert_eq!(resolved["round"], 2);
+    }
+
+    #[test]
+    fn startup_reuses_an_existing_schema_while_a_reader_is_active() {
+        let temporary = tempfile::tempdir().unwrap();
+        let path = temporary.path().join("rooms.sqlite");
+        let initialized = app_with_path(&path).unwrap();
+        drop(initialized);
+        let reader = Connection::open(&path).unwrap();
+        reader
+            .execute_batch("BEGIN; SELECT COUNT(*) FROM rooms;")
+            .unwrap();
+
+        let reopened = app_with_path(&path);
+
+        assert!(reopened.is_ok());
+        reader.execute_batch("ROLLBACK;").unwrap();
     }
 
     #[test]
