@@ -14,7 +14,7 @@ Signal Salvo remains a free two-player browser tactics game for friends in a cal
 ## Revisions and deployment
 
 - Implementation SHA: `db97f2af7c994394f6fd0b129c3340a031249a43`.
-- Verification documentation SHA: recorded by the following report-only annotation commit.
+- Verification documentation SHA: `60588d3164ac02caf01f9c2a6ce487fa541dcd67`. The following annotation commit changes only this SHA record.
 - Static product: `https://signal-salvo.sociobot.in`, deployed from the implementation SHA on 2026-09-06.
 - Realtime product: revision `sf-signal-salvo-realtime--0000008` with build SHA `db97f2af7c994394f6fd0b129c3340a031249a43`.
 - Realtime image: `sociobotregistry.azurecr.io/sf-signal-salvo-realtime@sha256:309e1dbef0d078556076403cc5967a63f0019bae330e77f600c58c4ca7aab1af`.
