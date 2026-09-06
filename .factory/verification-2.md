@@ -10,6 +10,7 @@ Date: 2026-09-06
 
 - Implementation candidate: `db97f2af7c994394f6fd0b129c3340a031249a43`.
 - Documentation revision at review start: `8391a1bb222d6e6e9edfefac805549eff8b43c69`.
+- Verification documentation report commit: `26c059603bfd20445ff00c41a4ffd1df8d023e6a`.
 - Live URL: https://signal-salvo.sociobot.in
 - The live static JavaScript and CSS SHA-256 values exactly matched a clean local build of the reviewed candidate. Live `/health` returned HTTP 200 with this implementation SHA.
 
