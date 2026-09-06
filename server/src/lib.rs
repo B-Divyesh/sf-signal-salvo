@@ -8,7 +8,7 @@ use axum::{
     Json, Router,
 };
 use rand::{rngs::OsRng, Rng, RngCore};
-use rusqlite::{params, Connection, OptionalExtension};
+use rusqlite::{params, Connection, OpenFlags, OptionalExtension};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::{
@@ -245,7 +245,11 @@ pub fn app_with_path(path: &Path) -> Result<Router, rusqlite::Error> {
     // this release, so only initialize a new file and let normal requests use
     // the existing one after startup.
     let database_exists = path.metadata().is_ok_and(|metadata| metadata.len() > 0);
-    let connection = Connection::open(path)?;
+    // Azure Files does not provide SQLite's usual POSIX advisory-lock
+    // semantics. The dot-file VFS coordinates access with atomic filesystem
+    // entries instead; the deployment is also fixed at one replica.
+    let connection =
+        Connection::open_with_flags_and_vfs(path, OpenFlags::default(), "unix-dotfile")?;
     connection.busy_timeout(Duration::from_secs(5))?;
     if !database_exists {
         connection.execute_batch(
