@@ -2,6 +2,15 @@
 
 Date: 2026-09-06
 
+## Verification 1 update (2026-09-06)
+
+Independent QA reviewed implementation `a16d0052ee9fce5c87775a819f9516d36d5fe28a` against the live product and clean-checkout claim suite. The result is **FAIL**, not release acceptance: `.factory/verification-1.md` records two open findings.
+
+- A normal completed live online match produced a browser-console 410 from a race between polling and intended reconnect-token expiry.
+- Two public privacy claims (no personal-data storage and log contents) are absent from `.factory/claims.json` and have no sandbox tests.
+
+All 13 declared claim commands passed individually, as did `npm test`, build, formatting, and clippy. Live first-screen, sample, two-client room, health, isolation, allowance, route, legal, mobile, and axe checks otherwise passed. No product source, deployment, or product data was changed during verification. The prior outcome below describes implementation work; this update is the current QA status.
+
 ## Outcome
 
 Signal Salvo is a complete free first release for two friends in a call. A visitor can start the deterministic sample in one click or create a five-letter online room without an account. Each player privately queues three commands. Both plans resolve together for up to six rounds, followed by a win, loss, or draw screen and a rematch action.
