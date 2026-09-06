@@ -1,31 +1,35 @@
-# Play a short two-player tactics match — review 1 handoff
+# Play a six-round tactics match — review 2 handoff
 
 Date: 2026-09-06
 
 ## Outcome
 
-Review 1 is **PASS with 0 findings and 0 untested claims**. The complete report is `.factory/review-1.md`.
+Review 2 is **FAIL with 4 findings and 0 untested claims**. The full report is `.factory/review-2.md`.
 
-The job is to play a short two-player tactics match. It is for two friends on a call. The first action is **Try it with sample data**.
+The job is to play a six-round two-player tactics match. It is for two friends on a call. The first action is **Try it with sample data**.
 
 ## Revisions
 
 - Implementation reviewed: `db97f2af7c994394f6fd0b129c3340a031249a43`.
-- Documentation revision reviewed: `85522e6d610f89ceb69b881fb992f556eff06533`.
+- Documentation revision at review start: `970c0ec751135287eb2eb2d60154d0ce9cb814de`.
 - Live URL: https://signal-salvo.sociobot.in
-- The live static assets match the clean candidate build, and live `/health` reports the candidate SHA.
+- Live static asset hashes and `/health` match the implementation candidate.
+
+## Open findings
+
+1. Medium: after the phone sample ends, the result heading and score remain above the viewport and behind the sticky sample bar; focus stays on the document body.
+2. Medium: the global yellow focus outline has 1.58:1 contrast against the paper background, below the required 3:1.
+3. Low: metadata says **moves**, while the interface and terminology record use **commands**.
+4. Low: the README describes a “short call” but does not give the numeric session length required for browser games.
 
 ## Verification summary
 
-- A clean clone installed with `npm ci` and passed `npm test`: build, 4 frontend tests, 8 Rust tests, and 18 Chromium tests.
-- All 15 declared claim commands passed separately. The registry and test tags are complete and one-to-one.
-- Fresh desktop and phone browsers showed the job, audience, first action, and board before scrolling.
-- The sample reached **You won the match**, retained its sample label, reset to round 1, preserved real settings, used only the static site origin, and measured 59.94 fps on the phone.
-- Two independent live clients kept plans private, reconnected, completed six rounds to matching draw screens, cleared their sessions, and created a different rematch room. No failed room response or console error appeared after completion.
-- Live axe scans, the supplied URL verifier, keyboard/focus, reduced motion, 200% text, 44 px targets, route titles, legal pages, links, security headers, and the designed 404 passed.
-- Mobile Lighthouse scored 100 in performance, accessibility, best practices, and SEO. FCP was 0.9 s, LCP 1.2 s, CLS 0, and TBT 80 ms.
-- Live health, tenant isolation, and 429 with `Retry-After: 10` passed. The isolated real-service restart test proved SQLite persistence.
-- Both verification-1 findings remain closed: the post-match 410 did not recur, and both privacy statements have passing outcome tests.
+- A clean clone at `970c0ec` passed `npm ci`, `npm test`, `npm run build`, Rust formatting, and clippy. The suite has 4 frontend tests, 8 backend tests, and 18 browser tests.
+- All 15 exact claim commands passed independently. Registry IDs and test tags are complete and one-to-one.
+- Fresh desktop and phone sample runs reached **You won the match** after three rounds. The sample label persisted, reset worked, real settings were unchanged, no real session was created, and the phone measured 60 fps.
+- Independent desktop and phone clients kept plans hidden, recovered a reload, completed six online rounds, cleared sessions, and created a fresh rematch. No post-result request or console error occurred.
+- Live health, tenant isolation, 429 with `Retry-After: 10`, final token expiry, routes, legal pages, links, privacy paths, and the designed 404 passed.
+- Live axe found no serious or critical violations. URL verification passed all four public 200 routes. Mobile Lighthouse scored 100 in all four categories with 1.1 s LCP, 0 CLS, and 80 ms TBT.
 
 ## Run and verify
 
@@ -37,10 +41,10 @@ cargo fmt --check --manifest-path server/Cargo.toml
 cargo clippy --manifest-path server/Cargo.toml --all-targets -- -D warnings
 ```
 
-Every individual public claim command is listed in `.factory/claims.json`.
+Every individual claim command is listed in `.factory/claims.json`.
 
-## Evidence and remaining work
+## Evidence and next steps
 
-Review evidence is in `/work/.evidence/review-1/`. The report is also copied to `/work/.evidence/qa-report.md`, and the machine result is `/work/.evidence/qa-result.json`.
+Evidence is in `/work/.evidence/review-2/`. The report is also copied to `/work/.evidence/qa-report.md`, and the matching machine result is `/work/.evidence/qa-result.json`.
 
-No product source or deployment was changed. There are no known defects in the admitted scope. SQLite remains intended for one realtime replica on the product's durable `/data` mount; do not scale beyond one replica without changing the state store.
+Address all four findings, add regression coverage for phone result visibility and focus contrast, then run a fresh review. No product code or deployment was changed during this review.
