@@ -2,6 +2,12 @@
 
 Date: 2026-09-06
 
+## Verification 2 outcome
+
+Independent QA of implementation `db97f2af7c994394f6fd0b129c3340a031249a43` is **PASS** with zero findings and zero untested claims. The report is `.factory/verification-2.md` (documentation revision to be filled by its report commit). A fresh clean checkout passed `npm test`, build, formatting, linting, and every one of the 15 exact public claim commands. Live static assets matched the candidate build; live `/health` returned that candidate SHA.
+
+Fresh desktop and phone browsers showed the job, audience, first action, and board before scrolling. The sample completed to an end screen with its persistent sandbox label, reset cleanly, and measured 60 fps on the phone viewport. Two independent live clients completed a room and observed past its final polling window without a 410, failed request, or console error; both cleared their reconnect sessions. Accessibility, legal routes, expected 404, metadata, links, privacy routes, tenant isolation, health, and `429`/`Retry-After: 10` behavior passed. The isolated real-service restart-persistence claim passed. Evidence is under `/work/.evidence/verification-2/`.
+
 ## Outcome
 
 Repair 1 closes both findings from `.factory/verification-1.md`.
