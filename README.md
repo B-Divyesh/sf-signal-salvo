@@ -57,7 +57,7 @@ WO_DATA_DIR=/data /opt/fleet/lib/deploy-container.sh signal-salvo-realtime . Doc
 /opt/fleet/lib/deploy-static.sh signal-salvo dist
 ```
 
-The container starts with only `PORT` and generates random player tokens for each room. Active rooms and locked plans survive a service restart on the durable `/data` mount. `/health` returns the implementation build SHA. The static client allows connections only to the product-owned realtime origin.
+The container needs no secrets and generates random player tokens for each room. Production sets `PORT` and pins `SIGNAL_SALVO_DB` to a SQLite file on the durable `/data` mount. Active rooms and locked plans survive a service restart. `/health` returns the implementation build SHA. The static client allows connections only to the product-owned realtime origin.
 
 ## Privacy
 
