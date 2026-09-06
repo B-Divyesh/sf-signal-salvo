@@ -330,6 +330,14 @@ function restoreGameFocus(selector?: string): void {
       document.querySelector<HTMLElement>('#planner-title, #end-title, #game-title')?.focus({ preventScroll: true });
       return;
     }
+    if (selector === '#end-title' && target) {
+      const banner = document.querySelector<HTMLElement>('.demo-banner');
+      const clearance = (banner?.getBoundingClientRect().height ?? 0) + 16;
+      const top = Math.max(0, window.scrollY + target.getBoundingClientRect().top - clearance);
+      window.scrollTo({ top, behavior: 'instant' as ScrollBehavior });
+      target.focus({ preventScroll: true });
+      return;
+    }
     target?.focus({ preventScroll: true });
   });
 }
@@ -736,7 +744,7 @@ async function lockPlan(): Promise<void> {
     });
     statusMessage = demoGame.status === 'finished' ? 'The sample match is complete.' : `Round ${demoGame.round} is ready.`;
     playTone(demoGame.status === 'finished' ? 680 : 480);
-    renderGamePage(true);
+    renderGamePage(true, demoGame.status === 'finished' ? '#end-title' : '[data-sample-plan]');
     return;
   }
   if (!roomSession) return;

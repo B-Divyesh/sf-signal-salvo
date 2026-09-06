@@ -66,8 +66,9 @@ button:focus-visible,
 a:focus-visible,
 input:focus-visible,
 [tabindex]:focus-visible {
-  outline: 4px solid var(--sun);
+  outline: 4px solid var(--ink);
   outline-offset: 3px;
+  box-shadow: 0 0 0 3px var(--paper-high), 0 0 0 7px var(--ink);
 }
 
 button:disabled {
@@ -724,6 +725,7 @@ h3 {
 
 .end-screen h3 {
   font-size: 1.8rem;
+  scroll-margin-block-start: 88px;
 }
 
 .end-screen .primary-button,

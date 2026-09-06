@@ -1,6 +1,6 @@
 # Signal Salvo
 
-Signal Salvo is a free two-player browser tactics game for friends in a call. Each player secretly queues three commands, then both plans resolve together across six rounds. The intended session is one short call and needs no account or download.
+Signal Salvo is a free two-player browser tactics game for friends in a call. Each player secretly queues three commands, then both plans resolve together across six rounds. Plan for a 2–4 minute online match; each round gives both players 20 seconds to choose commands. It needs no account or download.
 
 The first release includes room codes, two craft per player, currents, sonar, pulse damage, reconnects, an end screen, and rematches. It does not include matchmaking, rankings, progression, purchases, or realistic military imagery.
 

@@ -12,10 +12,10 @@ The interface is deliberately single-mode so the board reads consistently in a s
 
 | Token | Value | Use |
 | --- | --- | --- |
-| `--ink` | `#142F35` | Primary text, grid, deep water |
+| `--ink` | `#142F35` | Primary text, grid, deep water, outer focus ring |
 | `--ink-soft` | `#3E5B5F` | Secondary text |
 | `--paper` | `#F4EDDA` | Page background |
-| `--paper-high` | `#FFF9E9` | Raised controls and panels |
+| `--paper-high` | `#FFF9E9` | Raised controls, panels, and inner focus ring |
 | `--shallows` | `#B8D9CE` | Light water band |
 | `--current` | `#2E7773` | Current and focus treatment |
 | `--coral` | `#D6533C` | Primary action and danger |
@@ -37,6 +37,7 @@ All normal text combinations are designed for at least 4.5:1 contrast. Coral is 
 - Panels resemble offset paper sheets: 2 px ink borders, small 2–6 px corner cuts, and hard 4 px shadows.
 - Queued commands appear as numbered paper chits. Removing and replacing a command updates the visible order immediately.
 - Board cells are explicit buttons with row and column names. Color is always paired with a symbol or text.
+- Keyboard focus uses a paired paper-and-ink ring. The ink edge exceeds 3:1 on light surfaces; the paper edge remains visible against dark panels.
 - Resolution advances as a short sequence of printed log lines, so outcomes remain legible without motion or sound.
 
 ## Motion and sound

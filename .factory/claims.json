@@ -28,6 +28,13 @@
     "sandbox": "Chromium at 390x844; measure requestAnimationFrame for 2.2 seconds during the sample match."
   },
   {
+    "id": "online-match-duration",
+    "claim": "A full six-round online match gives each round a 20-second planning window, for about 2 minutes of decision time.",
+    "where": "README",
+    "test": "npm test -- --grep @claim:online-match-duration",
+    "sandbox": "Create an isolated local room, complete six rounds, and measure each advertised planning deadline."
+  },
+  {
     "id": "demo-private",
     "claim": "The sample uses a separate namespace and loads no analytics, ads, trackers, external fonts, or third-party scripts.",
     "where": "Landing facts, demo banner, privacy page, and README",

@@ -8,6 +8,28 @@ import { join } from 'node:path';
 
 const delay = (milliseconds: number) => new Promise((resolve) => setTimeout(resolve, milliseconds));
 
+function firstRgb(value: string): string {
+  const color = value.match(/rgb\([^)]*\)/)?.[0];
+  if (!color) throw new Error(`No RGB color found in ${value}.`);
+  return color;
+}
+
+function contrastRatio(first: string, second: string): number {
+  const luminance = (value: string): number => {
+    const parts = value.match(/\d+(?:\.\d+)?/g)?.slice(0, 3).map(Number);
+    if (!parts || parts.length !== 3) throw new Error(`Cannot read color ${value}.`);
+    const channels = parts.map((channel) => {
+      const normalized = channel / 255;
+      return normalized <= 0.04045
+        ? normalized / 12.92
+        : ((normalized + 0.055) / 1.055) ** 2.4;
+    });
+    return 0.2126 * channels[0] + 0.7152 * channels[1] + 0.0722 * channels[2];
+  };
+  const [lighter, darker] = [luminance(first), luminance(second)].sort((a, b) => b - a);
+  return (lighter + 0.05) / (darker + 0.05);
+}
+
 async function startIsolatedRoomService(databasePath: string, port: number): Promise<ChildProcess> {
   const child = spawn('cargo', ['run', '--quiet', '--manifest-path', 'server/Cargo.toml'], {
     cwd: process.cwd(),
@@ -101,6 +123,28 @@ test('the sample plays through to an actual result @claim:sample-match-end', asy
   await page.screenshot({ path: testInfo.outputPath('sample-end-screen.png'), fullPage: true });
 });
 
+test('the phone sample presents its result below the persistent demo banner', async ({ page }, testInfo) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await loadDemo(page);
+  await playSampleToEnd(page);
+  const resultTitle = page.locator('#end-title');
+  await expect(resultTitle).toBeFocused();
+  await expect(resultTitle).toBeInViewport();
+  const placement = await resultTitle.evaluate((title) => {
+    const banner = document.querySelector<HTMLElement>('.demo-banner');
+    const heading = title.getBoundingClientRect();
+    return {
+      bannerBottom: banner?.getBoundingClientRect().bottom ?? 0,
+      headingTop: heading.top,
+      headingBottom: heading.bottom,
+      viewportHeight: window.innerHeight,
+    };
+  });
+  expect(placement.headingTop).toBeGreaterThanOrEqual(placement.bannerBottom + 8);
+  expect(placement.headingBottom).toBeLessThanOrEqual(placement.viewportHeight);
+  await page.screenshot({ path: testInfo.outputPath('sample-end-phone-viewport.png') });
+});
+
 test('restarting the sample clears its match state @claim:restart-reset', async ({ page }) => {
   await loadDemo(page);
   await playSampleToEnd(page);
@@ -152,6 +196,48 @@ test('the sample animation loop sustains 55 fps @claim:steady-frame-rate', async
   await page.waitForTimeout(2_200);
   const fps = await page.evaluate(() => window.signalSalvoMetrics.fps);
   expect(fps).toBeGreaterThanOrEqual(55);
+});
+
+test('a six-round online match provides six 20-second planning windows @claim:online-match-duration', async () => {
+  const api = await apiRequest.newContext({
+    baseURL: 'http://127.0.0.1:8787',
+    extraHTTPHeaders: { 'X-Forwarded-For': '198.51.100.29' },
+  });
+  const commands = [
+    { craft: 'Echo', action: 'hold' },
+    { craft: 'Kilo', action: 'hold' },
+    { craft: 'Echo', action: 'sonar' },
+  ];
+  try {
+    const created = await (await api.post('/api/rooms')).json();
+    const joined = await (await api.post(`/api/rooms/${created.code}/join`)).json();
+    const planningWindows: number[] = [joined.view.deadlineMs - Date.now()];
+    for (let round = 1; round <= 6; round += 1) {
+      const locked = await api.post(`/api/rooms/${created.code}/commands`, {
+        headers: { 'X-Player-Token': created.token },
+        data: { round, commands },
+      });
+      expect(locked.ok()).toBeTruthy();
+      const resolved = await api.post(`/api/rooms/${created.code}/commands`, {
+        headers: { 'X-Player-Token': joined.token },
+        data: { round, commands },
+      });
+      expect(resolved.ok()).toBeTruthy();
+      const view = await resolved.json();
+      if (round < 6) planningWindows.push(view.deadlineMs - Date.now());
+      else {
+        expect(view.phase).toBe('finished');
+        expect(view.deadlineMs).toBeNull();
+      }
+    }
+    expect(planningWindows).toHaveLength(6);
+    for (const milliseconds of planningWindows) {
+      expect(milliseconds).toBeGreaterThanOrEqual(18_500);
+      expect(milliseconds).toBeLessThanOrEqual(20_100);
+    }
+  } finally {
+    await api.dispose();
+  }
 });
 
 test('the one-click sample stays isolated and same-origin @claim:demo-private', async ({ page }) => {
@@ -576,10 +662,15 @@ test('two hundred percent text and keyboard focus keep the game usable', async (
   await page.getByRole('button', { name: 'Queue sample plan' }).focus();
   const focusStyle = await page.getByRole('button', { name: 'Queue sample plan' }).evaluate((element) => {
     const style = getComputedStyle(element);
-    return { width: style.outlineWidth, style: style.outlineStyle };
+    return { width: style.outlineWidth, style: style.outlineStyle, outlineColor: style.outlineColor };
   });
   expect(focusStyle.style).not.toBe('none');
   expect(Number.parseFloat(focusStyle.width)).toBeGreaterThanOrEqual(3);
+  expect(contrastRatio(focusStyle.outlineColor, 'rgb(255, 249, 233)')).toBeGreaterThanOrEqual(3);
+
+  await page.getByRole('button', { name: 'Reset demo' }).focus();
+  const bannerFocus = await page.getByRole('button', { name: 'Reset demo' }).evaluate((element) => getComputedStyle(element).boxShadow);
+  expect(contrastRatio(firstRgb(bannerFocus), 'rgb(20, 47, 53)')).toBeGreaterThanOrEqual(3);
 });
 
 test('phone touch controls provide at least a 44 pixel target', async ({ page }) => {
