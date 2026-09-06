@@ -1,91 +1,46 @@
-# Signal Salvo repair handoff
+# Play a short two-player tactics match — review 1 handoff
 
 Date: 2026-09-06
 
-## Verification 2 outcome
-
-Independent QA of implementation `db97f2af7c994394f6fd0b129c3340a031249a43` is **PASS** with zero findings and zero untested claims. The verification documentation report commit is `26c059603bfd20445ff00c41a4ffd1df8d023e6a`; the report is `.factory/verification-2.md`. A fresh clean checkout passed `npm test`, build, formatting, linting, and every one of the 15 exact public claim commands. Live static assets matched the candidate build; live `/health` returned that candidate SHA.
-
-Fresh desktop and phone browsers showed the job, audience, first action, and board before scrolling. The sample completed to an end screen with its persistent sandbox label, reset cleanly, and measured 60 fps on the phone viewport. Two independent live clients completed a room and observed past its final polling window without a 410, failed request, or console error; both cleared their reconnect sessions. Accessibility, legal routes, expected 404, metadata, links, privacy routes, tenant isolation, health, and `429`/`Retry-After: 10` behavior passed. The isolated real-service restart-persistence claim passed. Evidence is under `/work/.evidence/verification-2/`.
-
 ## Outcome
 
-Repair 1 closes both findings from `.factory/verification-1.md`.
+Review 1 is **PASS with 0 findings and 0 untested claims**. The complete report is `.factory/review-1.md`.
 
-- A completed online match no longer produces a late HTTP 410 or browser-console error. Authenticated room operations are serialized per client, and stale responses cannot replace a newer or cleared session.
-- The two privacy promises now have entries in `.factory/claims.json` and outcome-based tests against an isolated real service, SQLite file, and captured server logs.
+The job is to play a short two-player tactics match. It is for two friends on a call. The first action is **Try it with sample data**.
 
-Signal Salvo remains a free two-player browser tactics game for friends in a call. The sample and online room flows, visual design, product boundaries, and durable deployment model are unchanged.
+## Revisions
 
-## Revisions and deployment
+- Implementation reviewed: `db97f2af7c994394f6fd0b129c3340a031249a43`.
+- Documentation revision reviewed: `85522e6d610f89ceb69b881fb992f556eff06533`.
+- Live URL: https://signal-salvo.sociobot.in
+- The live static assets match the clean candidate build, and live `/health` reports the candidate SHA.
 
-- Implementation SHA: `db97f2af7c994394f6fd0b129c3340a031249a43`.
-- Verification documentation SHA: `60588d3164ac02caf01f9c2a6ce487fa541dcd67`. The following annotation commit changes only this SHA record.
-- Static product: `https://signal-salvo.sociobot.in`, deployed from the implementation SHA on 2026-09-06.
-- Realtime product: revision `sf-signal-salvo-realtime--0000008` with build SHA `db97f2af7c994394f6fd0b129c3340a031249a43`.
-- Realtime image: `sociobotregistry.azurecr.io/sf-signal-salvo-realtime@sha256:309e1dbef0d078556076403cc5967a63f0019bae330e77f600c58c4ca7aab1af`.
-- The deployment preserved the existing `sf-signal-salvo-realtime-data` volume at `/data`, existing environment and probes, and `minReplicas: 1` / `maxReplicas: 1`.
-- The container wrapper installed the healthy revision. Its final root check was stopped because the room service deliberately returns HTTP 404 at `/`; `/health` and real room requests were checked directly.
+## Verification summary
 
-## Repair details
+- A clean clone installed with `npm ci` and passed `npm test`: build, 4 frontend tests, 8 Rust tests, and 18 Chromium tests.
+- All 15 declared claim commands passed separately. The registry and test tags are complete and one-to-one.
+- Fresh desktop and phone browsers showed the job, audience, first action, and board before scrolling.
+- The sample reached **You won the match**, retained its sample label, reset to round 1, preserved real settings, used only the static site origin, and measured 59.94 fps on the phone.
+- Two independent live clients kept plans private, reconnected, completed six rounds to matching draw screens, cleared their sessions, and created a different rematch room. No failed room response or console error appeared after completion.
+- Live axe scans, the supplied URL verifier, keyboard/focus, reduced motion, 200% text, 44 px targets, route titles, legal pages, links, security headers, and the designed 404 passed.
+- Mobile Lighthouse scored 100 in performance, accessibility, best practices, and SEO. FCP was 0.9 s, LCP 1.2 s, CLS 0, and TBT 80 ms.
+- Live health, tenant isolation, and 429 with `Retry-After: 10` passed. The isolated real-service restart test proved SQLite persistence.
+- Both verification-1 findings remain closed: the post-match 410 did not recur, and both privacy statements have passing outcome tests.
 
-### Completed-match polling
+## Run and verify
 
-The client previously allowed a scheduled room GET and a plan POST to overlap. On the final round, one request could deliver the result and invalidate the reconnect token while the other request was still pending, producing the recorded 410.
+```bash
+npm ci
+npm test
+npm run build
+cargo fmt --check --manifest-path server/Cargo.toml
+cargo clippy --manifest-path server/Cargo.toml --all-targets -- -D warnings
+```
 
-All token-bearing room operations now use one serialized operation chain. Each operation captures its session, applies a response only while that session is current, and clears the token as soon as the final view arrives. The existing two-client browser test now waits beyond the poll interval after both end screens and asserts that neither client receives a failed room response or console error.
+Every individual public claim command is listed in `.factory/claims.json`.
 
-### Privacy claims
+## Evidence and remaining work
 
-Two entries were added to `.factory/claims.json`:
+Review evidence is in `/work/.evidence/review-1/`. The report is also copied to `/work/.evidence/qa-report.md`, and the machine result is `/work/.evidence/qa-result.json`.
 
-- `no-personal-data-storage`: sends unique name, email, and account-detail markers through real room requests, stops the isolated service, and verifies that neither API responses nor persisted SQLite bytes contain them.
-- `request-log-privacy`: captures JSON logs from the real Rust service, verifies request path and status entries, and verifies that the reconnect token and unique command-body markers are absent.
-
-Request tracing now records method, path, status, and latency at INFO. Headers and bodies are not logged. The privacy page now names “reconnect tokens” and “command bodies” precisely.
-
-## Clean-checkout verification
-
-A clean clone of implementation `db97f2a` was installed with `npm ci`.
-
-- All 15 exact commands in `.factory/claims.json` passed individually.
-- `npm test` passed: 4 frontend unit tests, 8 Rust tests, and 18 Chromium browser tests.
-- `npm run build` produced `dist/`.
-- JavaScript: 34.13 KB raw / 11.70 KB gzip.
-- CSS: 16.73 KB raw / 4.64 KB gzip.
-- `cargo fmt --check --manifest-path server/Cargo.toml` passed.
-- `cargo clippy --manifest-path server/Cargo.toml --all-targets -- -D warnings` passed.
-
-## Live browser and accessibility verification
-
-Fresh browser contexts checked the deployed HTTPS product.
-
-- Desktop 1440×900 and phone 390×844 both showed the job, audience, first action, and playable board before scrolling. The phone page had no horizontal overflow.
-- The one-click sample reached its real end screen, kept the sample label, measured at least 55 fps, reset to round 1 with an empty queue, preserved real settings, and made only same-origin requests.
-- Two independent clients completed all six online rounds. Both reached end screens and cleared their reconnect sessions. The 1.5-second post-match observation found zero failed room responses and zero console errors.
-- Playwright axe found zero serious or critical violations on `/`, `/demo`, `/privacy`, `/terms`, and the designed 404.
-- `/opt/fleet/lib/verify-url.sh` passed `/`, `/demo`, `/privacy`, and `/terms`: correct title and language, one `h1`, a `main` landmark, labelled controls, complete image alternatives, and no console errors.
-- Live mobile Lighthouse: performance 100, accessibility 100, best practices 100, SEO 100; FCP 1.0 s, LCP 1.1 s, CLS 0, TBT 30 ms.
-- Evidence is in ignored local QA storage at `.factory/evidence/repair-1/`.
-
-## Live backend and route verification
-
-- `/health` returned HTTP 200 and the implementation SHA.
-- A valid token from another room received HTTP 401.
-- A locked plan survived an actual restart of revision `sf-signal-salvo-realtime--0000008` and returned still locked.
-- In a fresh allowance window, request 40 after room creation returned HTTP 429 with `Retry-After: 10`.
-- `/`, `/demo`, `/privacy`, `/terms`, `robots.txt`, `sitemap.xml`, and the social image returned HTTP 200.
-- `/missing-page` returned the expected HTTP 404 with the designed page and route back.
-- CSP, content-type protection, referrer policy, permissions policy, and cross-origin opener policy are present.
-
-## Earlier findings disposition
-
-All earlier review and verification items remain closed. The repair did not regress first-screen wording, sample isolation, settings preservation, hidden plans, stale-plan rejection, reconnects, rematches, token expiry, client/server movement alignment, keyboard and focus handling, reduced motion, text zoom, touch sizes, route metadata, legal pages, tenant isolation, restart persistence, or rate limiting.
-
-The two open verification-1 findings are now closed by direct live and clean-checkout evidence. No earlier minor finding reopened.
-
-## Known constraints and next steps
-
-There are no known functional gaps in the admitted first-release scope. The game intentionally has no accounts, matchmaking, ranking, progression, purchases, AI integration, or third-party realtime provider.
-
-SQLite safety depends on the one-replica deployment and durable `/data` mount. Do not scale this service above one replica without moving room state to a different store. The catalog description remains a verb-first 88-character line and was copied to `/work/.evidence/catalog-description.txt`. There is no billing offer because the researched product is free.
+No product source or deployment was changed. There are no known defects in the admitted scope. SQLite remains intended for one realtime replica on the product's durable `/data` mount; do not scale beyond one replica without changing the state store.
