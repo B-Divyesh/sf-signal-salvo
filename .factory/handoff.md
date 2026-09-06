@@ -1,106 +1,85 @@
-# Signal Salvo handoff
+# Signal Salvo repair handoff
 
 Date: 2026-09-06
 
-## Verification 1 update (2026-09-06)
-
-Independent QA reviewed implementation `a16d0052ee9fce5c87775a819f9516d36d5fe28a` against the live product and clean-checkout claim suite. The result is **FAIL**, not release acceptance: `.factory/verification-1.md` records two open findings.
-
-- A normal completed live online match produced a browser-console 410 from a race between polling and intended reconnect-token expiry.
-- Two public privacy claims (no personal-data storage and log contents) are absent from `.factory/claims.json` and have no sandbox tests.
-
-All 13 declared claim commands passed individually, as did `npm test`, build, formatting, and clippy. Live first-screen, sample, two-client room, health, isolation, allowance, route, legal, mobile, and axe checks otherwise passed. No product source, deployment, or product data was changed during verification. The prior outcome below describes implementation work; this update is the current QA status.
-
 ## Outcome
 
-Signal Salvo is a complete free first release for two friends in a call. A visitor can start the deterministic sample in one click or create a five-letter online room without an account. Each player privately queues three commands. Both plans resolve together for up to six rounds, followed by a win, loss, or draw screen and a rematch action.
+Repair 1 closes both findings from `.factory/verification-1.md`.
 
-The job, audience, and first action appear before scrolling on both a 390×844 phone and a desktop. The playable board is also present on that first screen rather than behind a menu.
+- A completed online match no longer produces a late HTTP 410 or browser-console error. Authenticated room operations are serialized per client, and stale responses cannot replace a newer or cleared session.
+- The two privacy promises now have entries in `.factory/claims.json` and outcome-based tests against an isolated real service, SQLite file, and captured server logs.
+
+Signal Salvo remains a free two-player browser tactics game for friends in a call. The sample and online room flows, visual design, product boundaries, and durable deployment model are unchanged.
 
 ## Revisions and deployment
 
-- Implementation SHA: `a16d0052ee9fce5c87775a819f9516d36d5fe28a`.
-- Documentation SHA: `44918ed89be37428cda03e7ab6db54059c13e1ea`.
-- The handoff commit is a later report-only commit. It does not change either deployed artifact.
-- Static product: `https://signal-salvo.sociobot.in`, rebuilt and deployed after the implementation and documentation commits.
-- Realtime product: revision `sf-signal-salvo-realtime--0000007`, image build `a16d0052ee9f`, healthy with 100% traffic.
-- `/health` returns the full implementation SHA.
-- Realtime configuration remains single-revision with `minReplicas: 1`, `maxReplicas: 1`, and the existing `sf-signal-salvo-realtime-data` Azure Files volume mounted at `/data`.
-- SQLite uses `/data/signal-salvo.sqlite`. The `unix-dotfile` VFS supplies filesystem-based locking suitable for the mounted network share. The original database filename and any earlier room state were retained.
+- Implementation SHA: `db97f2af7c994394f6fd0b129c3340a031249a43`.
+- Verification documentation SHA: recorded by the following report-only annotation commit.
+- Static product: `https://signal-salvo.sociobot.in`, deployed from the implementation SHA on 2026-09-06.
+- Realtime product: revision `sf-signal-salvo-realtime--0000008` with build SHA `db97f2af7c994394f6fd0b129c3340a031249a43`.
+- Realtime image: `sociobotregistry.azurecr.io/sf-signal-salvo-realtime@sha256:309e1dbef0d078556076403cc5967a63f0019bae330e77f600c58c4ca7aab1af`.
+- The deployment preserved the existing `sf-signal-salvo-realtime-data` volume at `/data`, existing environment and probes, and `minReplicas: 1` / `maxReplicas: 1`.
+- The container wrapper installed the healthy revision. Its final root check was stopped because the room service deliberately returns HTTP 404 at `/`; `/health` and real room requests were checked directly.
 
-The container deployment wrapper built and installed the successful image, preserved the volume and one-replica bounds, and bound the managed certificate. Its final root-URL poll was interrupted because the room service deliberately returns HTTP 404 at `/`; `/health` and actual room requests were then checked directly. The static deployment wrapper completed successfully.
+## Repair details
 
-## Work completed
+### Completed-match polling
 
-- Built the product-specific bathymetric paper interface, generated original scene, responsive first screen, live board, command controls, log, result, settings, legal routes, and designed 404.
-- Implemented deterministic sample play through a real end state, one-action reset, persistent demo label, and separate `demo:` storage.
-- Implemented product-owned online rooms with hashed player tokens, hidden plans, simultaneous resolution, current movement, sonar, wake marks, damage, reconnects, rematches, deadlines, and final token expiry.
-- Kept the frontend and server resolution rules aligned, including movement by an adjacent line of craft.
-- Added stale-round rejection so a delayed command cannot change a round that already resolved.
-- Preserved real settings while entering, resetting, and leaving the sample. Leaving the sample discards demo storage.
-- Added recovery for network failures and server conflicts without leaking an opponent plan.
-- Added outcome tests for the deterministic end, reset, settings, privacy, independent clients, reconnect, rematch, token expiry, restart persistence, health, rate limiting, invalid input, keyboard use, focus, reduced motion, text zoom, touch sizes, routing, and 404 behavior.
-- Added route metadata, sitemap, robots, social preview, security headers, privacy and terms pages, README, MIT license, demo record, copy audit, claims registry, visual thesis, and catalog description.
-- Corrected the deployment-only SQLite lock failure at its cause. Startup no longer reads an existing schema during revision handoff, and SQLite uses filesystem locking on the durable network mount.
+The client previously allowed a scheduled room GET and a plan POST to overlap. On the final round, one request could deliver the result and invalidate the reconnect token while the other request was still pending, producing the recorded 410.
 
-## Verification
+All token-bearing room operations now use one serialized operation chain. Each operation captures its session, applies a response only while that session is current, and clears the token as soon as the final view arrives. The existing two-client browser test now waits beyond the poll interval after both end screens and asserts that neither client receives a failed room response or console error.
 
-### Clean checkout
+### Privacy claims
 
-A fresh clone at the implementation SHA was installed with `npm ci`.
+Two entries were added to `.factory/claims.json`:
 
-- Every exact command in `.factory/claims.json` passed individually: 13 of 13.
-- `npm test` passed from that clone: build, 4 frontend unit tests, 8 Rust tests, and 16 Chromium browser tests.
+- `no-personal-data-storage`: sends unique name, email, and account-detail markers through real room requests, stops the isolated service, and verifies that neither API responses nor persisted SQLite bytes contain them.
+- `request-log-privacy`: captures JSON logs from the real Rust service, verifies request path and status entries, and verifies that the reconnect token and unique command-body markers are absent.
+
+Request tracing now records method, path, status, and latency at INFO. Headers and bodies are not logged. The privacy page now names “reconnect tokens” and “command bodies” precisely.
+
+## Clean-checkout verification
+
+A clean clone of implementation `db97f2a` was installed with `npm ci`.
+
+- All 15 exact commands in `.factory/claims.json` passed individually.
+- `npm test` passed: 4 frontend unit tests, 8 Rust tests, and 18 Chromium browser tests.
 - `npm run build` produced `dist/`.
-- Production bundle sizes: JavaScript 33.37 KB raw / 11.50 KB gzip; CSS 16.73 KB raw / 4.64 KB gzip.
+- JavaScript: 34.13 KB raw / 11.70 KB gzip.
+- CSS: 16.73 KB raw / 4.64 KB gzip.
 - `cargo fmt --check --manifest-path server/Cargo.toml` passed.
 - `cargo clippy --manifest-path server/Cargo.toml --all-targets -- -D warnings` passed.
 
-### Accessibility and performance
+## Live browser and accessibility verification
 
-- The URL verifier passed `/`, `/demo`, `/privacy`, and `/terms` with the expected route titles, `lang="en"`, one `h1`, a `main` landmark, complete alternative text, labelled buttons, and no console errors.
-- Playwright axe checks found zero serious or critical violations on `/`, `/demo`, `/privacy`, `/terms`, and the 404 page, both locally and against HTTPS.
-- Keyboard, dialog focus return, arrow-key board movement, 200% text, reduced motion, and 44 px phone targets have browser regressions.
-- Local mobile Lighthouse: performance 100, accessibility 100, best practices 100, SEO 100; FCP 0.90 s, LCP 1.36 s, CLS 0, TBT 0 ms, total transfer 62.7 KB.
-- The live 390×844 run measured 60 fps. The automated claim keeps a conservative floor of 55 fps.
+Fresh browser contexts checked the deployed HTTPS product.
 
-### Live browser evidence
+- Desktop 1440×900 and phone 390×844 both showed the job, audience, first action, and playable board before scrolling. The phone page had no horizontal overflow.
+- The one-click sample reached its real end screen, kept the sample label, measured at least 55 fps, reset to round 1 with an empty queue, preserved real settings, and made only same-origin requests.
+- Two independent clients completed all six online rounds. Both reached end screens and cleared their reconnect sessions. The 1.5-second post-match observation found zero failed room responses and zero console errors.
+- Playwright axe found zero serious or critical violations on `/`, `/demo`, `/privacy`, `/terms`, and the designed 404.
+- `/opt/fleet/lib/verify-url.sh` passed `/`, `/demo`, `/privacy`, and `/terms`: correct title and language, one `h1`, a `main` landmark, labelled controls, complete image alternatives, and no console errors.
+- Live mobile Lighthouse: performance 100, accessibility 100, best practices 100, SEO 100; FCP 1.0 s, LCP 1.1 s, CLS 0, TBT 30 ms.
+- Evidence is in ignored local QA storage at `.factory/evidence/repair-1/`.
 
-Fresh browser contexts checked the HTTPS product after deployment.
+## Live backend and route verification
 
-- Desktop first screen: job, audience, sample action, plain facts, and playable board visible.
-- Phone first screen at 390×844: job, audience, sample action, and board visible without horizontal overflow.
-- Sample: entered in one click, completed all six rounds to a real win, retained the sample label, reset to round 1 with an empty queue, and left real settings unchanged.
-- Online: two independent browser contexts created and joined a room, kept the first locked plan hidden, reconnected, completed all six rounds to a draw, cleared reconnect tokens, and created a different rematch room.
-- Browser console errors: 0.
-- Evidence: `.factory/evidence/live-desktop-first-screen.png`, `live-phone-first-screen.png`, `live-sample-end-screen.png`, `live-online-player-a-end.png`, and `live-online-player-b-end.png`.
+- `/health` returned HTTP 200 and the implementation SHA.
+- A valid token from another room received HTTP 401.
+- A locked plan survived an actual restart of revision `sf-signal-salvo-realtime--0000008` and returned still locked.
+- In a fresh allowance window, request 40 after room creation returned HTTP 429 with `Retry-After: 10`.
+- `/`, `/demo`, `/privacy`, `/terms`, `robots.txt`, `sitemap.xml`, and the social image returned HTTP 200.
+- `/missing-page` returned the expected HTTP 404 with the designed page and route back.
+- CSP, content-type protection, referrer policy, permissions policy, and cross-origin opener policy are present.
 
-### Live backend and routes
+## Earlier findings disposition
 
-- Health: HTTP 200 with the implementation SHA.
-- Tenant isolation: a valid token from another room received HTTP 401.
-- Restart persistence: a locked plan remained in SQLite across an actual replica replacement. Because the platform restart exceeded the 20-second planning deadline, recovery correctly resolved the saved plan and opened round 2.
-- Rate limit: request 39 in the live check received HTTP 429 with `Retry-After: 10`; the limit is 40 requests per 10-second window and earlier requests shared that window.
-- The service was returned to the original `/data/signal-salvo.sqlite` file after the locking repair, and a new room plus saved plan worked across another replica replacement.
-- `/missing-page` returns the expected HTTP 404 with the designed Signal Salvo page. The room service root also returns an intentional JSON 404.
-- All internal navigation targets, the Param Factory link, metadata assets, `robots.txt`, and `sitemap.xml` returned their expected status.
-- CSP, `X-Content-Type-Options`, `Referrer-Policy`, permissions policy, and frame protection are present.
+All earlier review and verification items remain closed. The repair did not regress first-screen wording, sample isolation, settings preservation, hidden plans, stale-plan rejection, reconnects, rematches, token expiry, client/server movement alignment, keyboard and focus handling, reduced motion, text zoom, touch sizes, route metadata, legal pages, tenant isolation, restart persistence, or rate limiting.
 
-## Findings disposition
-
-All findings found in the repository and earlier evidence are closed:
-
-- Plain first-screen wording, persistent sample status, demo isolation, real-setting preservation, and reset behavior are verified.
-- Online plan secrecy, stale-plan rejection, reconnect, rematch, final token expiry, tenant isolation, restart persistence, and rate limiting are verified by outcomes.
-- Client/server current movement now matches.
-- Deep links, unique route titles, history focus, static 404 status, metadata assets, legal routes, and external links are verified.
-- Phone wrapping, board bounds, touch size, keyboard focus, text zoom, reduced motion, and contrast checks pass.
-- The realtime rollout lock on Azure Files was repaired without deleting or replacing the original database.
+The two open verification-1 findings are now closed by direct live and clean-checkout evidence. No earlier minor finding reopened.
 
 ## Known constraints and next steps
 
-There are no known functional gaps in the admitted first-release scope. The game intentionally has no accounts, matchmaking, ranking, progression, purchases, or third-party realtime provider.
+There are no known functional gaps in the admitted first-release scope. The game intentionally has no accounts, matchmaking, ranking, progression, purchases, AI integration, or third-party realtime provider.
 
-SQLite safety depends on the documented one-replica deployment. Do not scale the realtime app above one replica without moving room state to a different store. The existing Container Apps template has no explicit platform probe; the product-owned `/health` endpoint is healthy and was exercised directly. An unused `signal-salvo-release1.sqlite` diagnostic file may remain on the product volume from rollout recovery; the running service does not read it.
-
-The next product decision should be based on the brief's completion and rematch measures, not speculative paid features.
+SQLite safety depends on the one-replica deployment and durable `/data` mount. Do not scale this service above one replica without moving room state to a different store. The catalog description remains a verb-first 88-character line and was copied to `/work/.evidence/catalog-description.txt`. There is no billing offer because the researched product is free.
