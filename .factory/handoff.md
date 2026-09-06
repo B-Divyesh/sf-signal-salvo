@@ -9,6 +9,7 @@ All four review-2 findings are fixed. The job is to play a six-round simultaneou
 ## Revisions and deployment
 
 - Static implementation: `44821dfc3d2401fa00f02045fe0464e5aee931c5` (`Fix result feedback and focus contrast`).
+- Verification documentation revision: `02c0607749d5f972e4c4b81841f96db8814d483a` (the handoff record after live verification).
 - The room-service implementation remains `db97f2af7c994394f6fd0b129c3340a031249a43`; it was not changed or restarted.
 - Static deployment: `2e998a80-e44d-4c65-8aaf-0167f2b667f1`.
 - Live URL: https://signal-salvo.sociobot.in
