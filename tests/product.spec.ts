@@ -2,7 +2,7 @@ import { expect, request as apiRequest, test, type Page } from '@playwright/test
 import AxeBuilder from '@axe-core/playwright';
 import { spawn, type ChildProcess } from 'node:child_process';
 import { once } from 'node:events';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -33,6 +33,38 @@ async function stopIsolatedRoomService(child: ChildProcess): Promise<void> {
   child.kill('SIGTERM');
   await Promise.race([once(child, 'exit'), delay(5_000)]);
   if (child.exitCode === null) child.kill('SIGKILL');
+}
+
+async function startCapturedRoomService(
+  databasePath: string,
+  port: number,
+): Promise<{ child: ChildProcess; readLogs: () => string }> {
+  let logs = '';
+  const child = spawn('cargo', ['run', '--quiet', '--manifest-path', 'server/Cargo.toml'], {
+    cwd: process.cwd(),
+    env: { ...process.env, PORT: String(port), SIGNAL_SALVO_DB: databasePath },
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+  child.stdout?.setEncoding('utf8');
+  child.stderr?.setEncoding('utf8');
+  child.stdout?.on('data', (chunk: string) => {
+    logs += chunk;
+  });
+  child.stderr?.on('data', (chunk: string) => {
+    logs += chunk;
+  });
+  for (let attempt = 0; attempt < 100; attempt += 1) {
+    if (child.exitCode !== null) throw new Error(`The captured room service exited with ${child.exitCode}.\n${logs}`);
+    try {
+      const response = await fetch(`http://127.0.0.1:${port}/health`);
+      if (response.ok) return { child, readLogs: () => logs };
+    } catch {
+      // The process is still starting.
+    }
+    await delay(100);
+  }
+  child.kill('SIGKILL');
+  throw new Error(`The captured room service did not become healthy.\n${logs}`);
 }
 
 async function loadDemo(page: Page): Promise<void> {
@@ -151,11 +183,132 @@ test('online play contacts only the site and room service @claim:online-network-
   expect([...origins].sort()).toEqual(['http://127.0.0.1:4173', 'http://127.0.0.1:8787']);
 });
 
+test('online rooms do not store submitted personal details @claim:no-personal-data-storage', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'signal-salvo-personal-data-'));
+  const databasePath = join(directory, 'rooms.sqlite');
+  const port = 18789;
+  let child: ChildProcess | undefined;
+  const personalMarkers = {
+    name: 'Private Player 73F6A1',
+    email: 'private-73f6a1@example.invalid',
+    accountDetails: 'account-private-73f6a1',
+  };
+  try {
+    child = await startIsolatedRoomService(databasePath, port);
+    const base = `http://127.0.0.1:${port}`;
+    const createdResponse = await fetch(`${base}/api/rooms`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(personalMarkers),
+    });
+    expect(createdResponse.ok).toBeTruthy();
+    const created = await createdResponse.json();
+    const joinedResponse = await fetch(`${base}/api/rooms/${created.code}/join`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(personalMarkers),
+    });
+    expect(joinedResponse.ok).toBeTruthy();
+    const joined = await joinedResponse.json();
+    const planResponse = await fetch(`${base}/api/rooms/${created.code}/commands`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Player-Token': created.token },
+      body: JSON.stringify({
+        round: 1,
+        commands: [
+          { craft: 'Echo', action: 'hold' },
+          { craft: 'Kilo', action: 'hold' },
+          { craft: 'Echo', action: 'sonar' },
+        ],
+        player: personalMarkers,
+      }),
+    });
+    expect(planResponse.ok).toBeTruthy();
+    expect(JSON.stringify({ created, joined })).not.toContain(personalMarkers.email);
+    await stopIsolatedRoomService(child);
+    child = undefined;
+
+    const storedBytes = await readFile(databasePath);
+    const storedText = storedBytes.toString('utf8');
+    for (const marker of Object.values(personalMarkers)) expect(storedText).not.toContain(marker);
+  } finally {
+    if (child) await stopIsolatedRoomService(child);
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test('request logs omit tokens and command bodies @claim:request-log-privacy', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'signal-salvo-private-logs-'));
+  const databasePath = join(directory, 'rooms.sqlite');
+  const port = 18790;
+  let service: Awaited<ReturnType<typeof startCapturedRoomService>> | undefined;
+  const commandMarker = 'private-command-body-91c5e2';
+  try {
+    service = await startCapturedRoomService(databasePath, port);
+    const base = `http://127.0.0.1:${port}`;
+    const created = await (await fetch(`${base}/api/rooms`, { method: 'POST' })).json();
+    const joined = await fetch(`${base}/api/rooms/${created.code}/join`, { method: 'POST' });
+    expect(joined.ok).toBeTruthy();
+    const response = await fetch(`${base}/api/rooms/${created.code}/commands`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Player-Token': created.token },
+      body: JSON.stringify({
+        round: 1,
+        commands: [
+          { craft: 'Echo', action: 'hold' },
+          { craft: 'Kilo', action: 'hold' },
+          { craft: 'Echo', action: 'sonar' },
+        ],
+        privateNote: commandMarker,
+      }),
+    });
+    expect(response.ok).toBeTruthy();
+    await stopIsolatedRoomService(service.child);
+    const entries = service
+      .readLogs()
+      .split('\n')
+      .flatMap((line) => {
+        try {
+          return [JSON.parse(line) as { fields?: { status?: number }; span?: { uri?: string } }];
+        } catch {
+          return [];
+        }
+      });
+    expect(entries.some((entry) => entry.span?.uri === '/api/rooms' && entry.fields?.status === 200)).toBe(true);
+    expect(
+      entries.some(
+        (entry) =>
+          entry.span?.uri === `/api/rooms/${created.code}/commands` && entry.fields?.status === 200,
+      ),
+    ).toBe(true);
+    const logs = service.readLogs();
+    expect(logs).not.toContain(created.token);
+    expect(logs).not.toContain(commandMarker);
+    expect(logs).not.toContain('"craft":"Echo"');
+    service = undefined;
+  } finally {
+    if (service) await stopIsolatedRoomService(service.child);
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
 test('two independent clients reconnect, finish, and open a rematch @claim:online-two-player @claim:room-reconnect @claim:online-rematch', async ({ browser }, testInfo) => {
   const contextA = await browser.newContext();
   const contextB = await browser.newContext();
   const playerA = await contextA.newPage();
   const playerB = await contextB.newPage();
+  const consoleErrors: string[] = [];
+  const failedRoomResponses: string[] = [];
+  for (const page of [playerA, playerB]) {
+    page.on('console', (message) => {
+      if (message.type() === 'error') consoleErrors.push(message.text());
+    });
+    page.on('response', (response) => {
+      if (response.url().includes('/api/rooms/') && response.status() >= 400) {
+        failedRoomResponses.push(`${response.status()} ${new URL(response.url()).pathname}`);
+      }
+    });
+  }
   try {
     await playerA.goto('/');
     await playerA.getByRole('button', { name: 'Create a room' }).click();
@@ -197,6 +350,9 @@ test('two independent clients reconnect, finish, and open a rematch @claim:onlin
     }
     await expect(playerA.locator('[data-end-screen]')).toBeVisible();
     await expect(playerB.locator('[data-end-screen]')).toBeVisible();
+    await Promise.all([playerA.waitForTimeout(1_200), playerB.waitForTimeout(1_200)]);
+    expect(failedRoomResponses).toEqual([]);
+    expect(consoleErrors).toEqual([]);
     expect(await playerA.evaluate(() => localStorage.getItem('signal-salvo:real-session'))).toBeNull();
     expect(await playerB.evaluate(() => localStorage.getItem('signal-salvo:real-session'))).toBeNull();
     await playerA.screenshot({ path: testInfo.outputPath('online-player-a-end.png'), fullPage: true });

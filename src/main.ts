@@ -76,6 +76,7 @@ let statusMessage = '';
 let errorMessage = '';
 let settings = loadSettings();
 let pollTimer: number | null = null;
+let roomOperation: Promise<void> = Promise.resolve();
 let dialogReturnFocus: HTMLElement | null = null;
 
 window.signalSalvoMetrics = { fps: 0, fixedUpdates: 0 };
@@ -739,12 +740,21 @@ async function lockPlan(): Promise<void> {
     return;
   }
   if (!roomSession) return;
+  const plan = structuredClone(queue);
+  const round = roomView?.round;
   try {
-    roomView = await api<RoomView>(`/api/rooms/${roomSession.code}/commands`, {
-      method: 'POST',
-      token: roomSession.token,
-      body: { round: roomView?.round, commands: queue },
+    const response = await serializeRoomOperation(async () => {
+      if (!roomSession || mode !== 'online') return null;
+      const session = roomSession;
+      const view = await api<RoomView>(`/api/rooms/${session.code}/commands`, {
+        method: 'POST',
+        token: session.token,
+        body: { round, commands: plan },
+      });
+      return { session, view };
     });
+    if (!response || !isCurrentSession(response.session)) return;
+    roomView = response.view;
     if (roomView.phase === 'finished') saveRoomSession(null);
     queue = [];
     statusMessage = roomView.queueLocked ? 'Plan locked. Waiting for your friend.' : `Round ${roomView.round} is ready.`;
@@ -753,7 +763,15 @@ async function lockPlan(): Promise<void> {
   } catch (error) {
     if (error instanceof ApiError && error.status === 409 && roomSession) {
       try {
-        roomView = await fetchRoom();
+        const response = await serializeRoomOperation(async () => {
+          if (!roomSession || mode !== 'online') return null;
+          const session = roomSession;
+          const view = await fetchRoom(session);
+          return { session, view };
+        });
+        if (!response || !isCurrentSession(response.session)) return;
+        roomView = response.view;
+        if (roomView.phase === 'finished') saveRoomSession(null);
         queue = [];
         errorMessage = error.message;
         statusMessage = roomView.phase === 'finished' ? 'The match is complete.' : `Round ${roomView.round} is ready.`;
@@ -815,9 +833,18 @@ async function joinRoom(code: string): Promise<void> {
 async function resumeRoom(): Promise<void> {
   if (!roomSession || mode === 'demo') return;
   try {
-    roomView = await fetchRoom();
+    const response = await serializeRoomOperation(async () => {
+      if (!roomSession || mode === 'demo') return null;
+      const session = roomSession;
+      const view = await fetchRoom(session);
+      return { session, view };
+    });
+    if (!response || !isCurrentSession(response.session)) return;
+    roomView = response.view;
+    if (roomView.phase === 'finished') saveRoomSession(null);
     mode = 'online';
-    statusMessage = `Room ${roomSession.code} restored.`;
+    statusMessage =
+      roomView.phase === 'finished' ? 'The match is complete.' : `Room ${response.session.code} restored.`;
     renderGamePage(false);
     startPolling();
   } catch (error) {
@@ -842,47 +869,67 @@ function leaveRoom(): void {
   renderGamePage(false);
 }
 
-async function fetchRoom(): Promise<RoomView> {
-  if (!roomSession) throw new Error('No room session');
-  const view = await api<RoomView>(`/api/rooms/${roomSession.code}`, { token: roomSession.token });
-  if (view.phase === 'finished') saveRoomSession(null);
-  return view;
+async function fetchRoom(session: RoomSession): Promise<RoomView> {
+  return api<RoomView>(`/api/rooms/${session.code}`, { token: session.token });
 }
 
 function startPolling(): void {
   stopPolling();
   if (mode !== 'online' || !roomSession || roomView?.phase === 'finished') return;
-  pollTimer = window.setTimeout(async () => {
-    try {
-      const previousRound = roomView?.round;
-      const wasWaiting = roomView?.phase === 'waiting';
-      roomView = await fetchRoom();
-      if (roomView.phase === 'finished') {
-        statusMessage = 'The match is complete.';
-      } else if (wasWaiting && roomView.phase === 'planning') {
-        statusMessage = 'Your friend joined. Round 1 is ready.';
-      } else if (previousRound !== roomView.round) {
-        queue = [];
-        statusMessage = `Round ${roomView.round} is ready.`;
-      }
-      renderGamePage(false);
-      startPolling();
-    } catch (error) {
-      if (error instanceof ApiError && error.status === 410) {
-        saveRoomSession(null);
-        statusMessage = 'The match ended and its reconnect token expired.';
-      } else {
-        errorMessage = 'The room connection paused. Reconnecting now.';
+  pollTimer = window.setTimeout(() => {
+    pollTimer = null;
+    void serializeRoomOperation(async () => {
+      if (mode !== 'online' || !roomSession || roomView?.phase === 'finished') return;
+      const session = roomSession;
+      try {
+        const previousRound = roomView?.round;
+        const wasWaiting = roomView?.phase === 'waiting';
+        const view = await fetchRoom(session);
+        if (!isCurrentSession(session)) return;
+        roomView = view;
+        if (roomView.phase === 'finished') {
+          saveRoomSession(null);
+          statusMessage = 'The match is complete.';
+        } else if (wasWaiting && roomView.phase === 'planning') {
+          statusMessage = 'Your friend joined. Round 1 is ready.';
+        } else if (previousRound !== roomView.round) {
+          queue = [];
+          statusMessage = `Round ${roomView.round} is ready.`;
+        }
         renderGamePage(false);
         startPolling();
+      } catch (error) {
+        if (!isCurrentSession(session)) return;
+        if (error instanceof ApiError && error.status === 410) {
+          saveRoomSession(null);
+          statusMessage = 'The match ended and its reconnect token expired.';
+          renderGamePage(false);
+        } else {
+          errorMessage = 'The room connection paused. Reconnecting now.';
+          renderGamePage(false);
+          startPolling();
+        }
       }
-    }
+    });
   }, 900);
 }
 
 function stopPolling(): void {
   if (pollTimer !== null) window.clearTimeout(pollTimer);
   pollTimer = null;
+}
+
+function isCurrentSession(session: RoomSession): boolean {
+  return roomSession?.code === session.code && roomSession.token === session.token;
+}
+
+function serializeRoomOperation<T>(operation: () => Promise<T>): Promise<T> {
+  const result = roomOperation.then(operation, operation);
+  roomOperation = result.then(
+    () => undefined,
+    () => undefined,
+  );
+  return result;
 }
 
 class ApiError extends Error {
@@ -965,7 +1012,7 @@ function privacyHtml(): string {
   return `
     <section><h2>Sample match data</h2><p>The sample match runs in your browser. It sends no game commands to the room service.</p><p>Sample settings use keys beginning with <code>demo:</code>. Resetting or leaving the demo removes those keys.</p></section>
     <section><h2>Online room data</h2><p>The room service stores the room code, board state, and hidden plans in SQLite. It never stores names, email addresses, or account details.</p><p>Your browser stores one random reconnect token. The service invalidates it after delivering the match result.</p></section>
-    <section><h2>Network and retention</h2><p>Online play sends commands only to the product-owned Signal Salvo room service. The site uses no analytics, ads, trackers, or third-party scripts.</p><p>Room records support active play and short recovery. Server logs contain request paths and status codes, not tokens or commands.</p></section>
+    <section><h2>Network and retention</h2><p>Online play sends commands only to the product-owned Signal Salvo room service. The site uses no analytics, ads, trackers, or third-party scripts.</p><p>Room records support active play and short recovery. Server logs contain request paths and status codes, not reconnect tokens or command bodies.</p></section>
     <section><h2>Your choices</h2><p>Use Reset demo to clear sample settings. Use Leave room to remove the reconnect token from this browser.</p><p>For a privacy request, email <a href="mailto:privacy@sociobot.in">privacy@sociobot.in</a>.</p></section>
   `;
 }

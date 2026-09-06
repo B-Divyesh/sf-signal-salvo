@@ -20,8 +20,9 @@ use std::{
 use tokio::sync::Mutex;
 use tower_http::{
     cors::{AllowOrigin, CorsLayer},
-    trace::TraceLayer,
+    trace::{DefaultMakeSpan, DefaultOnResponse, TraceLayer},
 };
+use tracing::Level;
 
 pub const BUILD_SHA: &str = match option_env!("BUILD_SHA") {
     Some(value) => value,
@@ -301,7 +302,11 @@ pub fn app_with_path(path: &Path) -> Result<Router, rusqlite::Error> {
         .layer(middleware::from_fn_with_state(state.clone(), rate_limit))
         .layer(cors)
         .layer(middleware::from_fn(security_headers))
-        .layer(TraceLayer::new_for_http())
+        .layer(
+            TraceLayer::new_for_http()
+                .make_span_with(DefaultMakeSpan::new().level(Level::INFO))
+                .on_response(DefaultOnResponse::new().level(Level::INFO)),
+        )
         .with_state(state))
 }
 

@@ -42,6 +42,20 @@
     "sandbox": "Fresh browser context; record every request while creating a real local room and assert only the static site and local room service origins appear."
   },
   {
+    "id": "no-personal-data-storage",
+    "claim": "The room service does not store names, email addresses, or account details.",
+    "where": "Privacy page",
+    "test": "npm test -- --grep @claim:no-personal-data-storage",
+    "sandbox": "Start an isolated real room service and SQLite file; submit unique personal-data markers through room requests, then verify neither responses nor the persisted database contain them."
+  },
+  {
+    "id": "request-log-privacy",
+    "claim": "Room-service logs contain request paths and status codes, but not reconnect tokens or command bodies.",
+    "where": "Privacy page",
+    "test": "npm test -- --grep @claim:request-log-privacy",
+    "sandbox": "Start an isolated real room service with captured logs; send an authenticated command request and verify path and status entries exist while the token and unique command-body markers do not."
+  },
+  {
     "id": "online-two-player",
     "claim": "Two independent browser clients can finish a room while plans stay hidden until both lock.",
     "where": "Landing page, game planner, and README",
